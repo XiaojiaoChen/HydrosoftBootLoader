@@ -21,11 +21,14 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-uint8_t CAN_ID = 0;
+#include "menu.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+uint8_t CAN_ID = 0;
+
  typedef struct CANBUS_HANDLE_TAG{
 	FDCAN_HandleTypeDef     CanHandle;
 	FDCAN_TxHeaderTypeDef   TxHeader;
@@ -55,7 +58,8 @@ CRC_HandleTypeDef hcrc;
 FDCAN_HandleTypeDef hfdcan1;
 
 /* USER CODE BEGIN PV */
-
+extern pFunction JumpToApplication;
+extern uint32_t JumpAddress;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -104,15 +108,37 @@ int main(void)
   MX_CRC_Init();
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
-  canConfig();
+
+  if (1)
+    {
+     /* Execute the IAP driver in order to reprogram the Flash */
+      canConfig();
+      /* Display main menu */
+      Main_Menu ();
+    }
+    /* Keep the user application running */
+    else
+    {
+      /* Test if user code is programmed starting from address "APPLICATION_ADDRESS" */
+      if (((*(__IO uint32_t*)APPLICATION_ADDRESS) & 0x2FFE0000 ) == 0x20000000)
+      {
+        /* Jump to user application */
+        JumpAddress = *(__IO uint32_t*) (APPLICATION_ADDRESS + 4);
+        JumpToApplication = (pFunction) JumpAddress;
+        /* Initialize user application's Stack Pointer */
+        __set_MSP(*(__IO uint32_t*) APPLICATION_ADDRESS);
+        JumpToApplication();
+      }
+    }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
-	  canSend();
-	  HAL_Delay(10);
+//	  canSend();
+//	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -343,7 +369,6 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 	    }
 
 		//handle Rx Frame
-
 
 
 
