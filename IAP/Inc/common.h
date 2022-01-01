@@ -41,6 +41,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32g0xx.h"
+#include "canbus_if.h"
 //#include "stm3210c_eval.h"
 
 /* Exported types ------------------------------------------------------------*/
@@ -67,8 +68,6 @@ void FDCAN_PutString(char *p_string);
 HAL_StatusTypeDef FDCAN_PutByte(uint8_t param);
 
 
-HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int16_t num,uint32_t timeout);
-HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout);
 
 #endif  /* __COMMON_H */
 

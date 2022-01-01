@@ -42,6 +42,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "common.h"
 #include "main.h"
+#include "canbus_if.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -182,16 +183,4 @@ HAL_StatusTypeDef FDCAN_PutByte( uint8_t param )
   * @}
   */
 
-HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int16_t num,uint32_t timeout){
-	HAL_StatusTypeDef status=HAL_OK;
-
-	return status;
-}
-
-HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout){
-	HAL_StatusTypeDef status=HAL_OK;
-
-	return status;
-
-}
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

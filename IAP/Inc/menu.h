@@ -53,7 +53,7 @@ typedef  void (*pFunction)(void);
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
-void Main_Menu(void);
+void IAP_Menu(uint32_t timeBeforeJumpMs);
 
 #endif  /* __MENU_H */
 

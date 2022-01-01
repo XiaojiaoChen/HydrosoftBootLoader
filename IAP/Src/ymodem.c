@@ -34,7 +34,7 @@
 #include "string.h"
 #include "main.h"
 #include "menu.h"
-
+#include "canbus_if.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 #define CRC16_F       /* activate the CRC16 integrity */

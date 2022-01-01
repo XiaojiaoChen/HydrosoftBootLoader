@@ -189,22 +189,18 @@ enum
    Note: this area is reserved for the IAP code                  */
 #define FLASH_PAGE_STEP         FLASH_PAGE_SIZE           /* Size of page : 2 Kbytes */
 
-/* Notable Flash addresses */
-#define FLASH_USER_START_ADDR   ADDR_FLASH_PAGE_16   /* Start @ of user Flash area */
+/* User Application Flash addresses */
+#define FLASH_USER_START_ADDR   ADDR_FLASH_PAGE_8   /* user Flash area starting at 0x08004000*/
 #define FLASH_USER_END_ADDR     (ADDR_FLASH_PAGE_127 + FLASH_PAGE_SIZE - 1)   /* End @ of user Flash area */
 
 #define APPLICATION_ADDRESS 	FLASH_USER_START_ADDR
 
 /* Define the user application size */
-#define USER_FLASH_SIZE               ((uint32_t)0x00003000) /* Small default template application */
-
+#define USER_FLASH_SIZE         ((uint32_t)(FLASH_USER_END_ADDR - FLASH_USER_START_ADDR + 1))
 
 /* Exported macro ------------------------------------------------------------*/
 /* ABSoulute value */
 #define ABS_RETURN(x,y)               ((x) < (y)) ? ((y)-(x)) : ((x)-(y))
-
-/* Get the number of sectors from where the user program will be loaded */
-#define FLASH_SECTOR_NUMBER           ((uint32_t)(ABS_RETURN(APPLICATION_ADDRESS,FLASH_START_BANK1))>>12)
 
 
 uint32_t FLASH_If_Erase(uint32_t StartSector);

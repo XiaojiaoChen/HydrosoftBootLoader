@@ -1,0 +1,72 @@
+Configuration	HydrosoftBootLoader
+STM32CubeMX 	6.4.0
+Date	01/01/2022
+MCU	STM32G0B1KETxN
+
+
+
+PERIPHERALS	MODES	FUNCTIONS	PINS
+FDCAN1	Activated	FDCAN1_RX	PA11 [PA9]
+FDCAN1	Activated	FDCAN1_TX	PA12 [PA10]
+SYS	Serial Wire	SYS_SWCLK	PA14-BOOT0
+SYS	Serial Wire	SYS_SWDIO	PA13
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+SYS	Dead Battery Signals disabled	SYS_VS_DBSignals	VP_SYS_VS_DBSignals
+USART1	Asynchronous	USART1_RX	PA10
+USART1	Asynchronous	USART1_TX	PB6
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+21	PA10	USART1_RX	
+22	PA11 [PA9]	FDCAN1_RX	
+23	PA12 [PA10]	FDCAN1_TX	
+24	PA13	SYS_SWDIO	
+25	PA14-BOOT0	SYS_SWCLK	
+30	PB6	USART1_TX	
+PERIPHERALS	MODES	FUNCTIONS	PINS
+FDCAN1	Activated	FDCAN1_RX	PA11 [PA9]
+FDCAN1	Activated	FDCAN1_TX	PA12 [PA10]
+SYS	Serial Wire	SYS_SWCLK	PA14-BOOT0
+SYS	Serial Wire	SYS_SWDIO	PA13
+SYS	SysTick	SYS_VS_Systick	VP_SYS_VS_Systick
+SYS	Dead Battery Signals disabled	SYS_VS_DBSignals	VP_SYS_VS_DBSignals
+USART1	Asynchronous	USART1_RX	PA10
+USART1	Asynchronous	USART1_TX	PB6
+
+
+
+Pin Nb	PINs	FUNCTIONs	LABELs
+21	PA10	USART1_RX	
+22	PA11 [PA9]	FDCAN1_RX	
+23	PA12 [PA10]	FDCAN1_TX	
+24	PA13	SYS_SWDIO	
+25	PA14-BOOT0	SYS_SWCLK	
+30	PB6	USART1_TX	
+
+
+
+SOFTWARE PROJECT
+
+Project Settings : 
+Project Name : HydrosoftBootLoader
+Project Folder : /home/softarm/STM32CubeIDE/workspace_1.7.0/HydrosoftBootLoader
+Toolchain / IDE : STM32CubeIDE
+Firmware Package Name and Version : STM32Cube FW_G0 V1.5.0
+
+
+Code Generation Settings : 
+STM32Cube MCU packages and embedded software packs : Copy only the necessary library files
+Generate peripheral initialization as a pair of '.c/.h' files per peripheral : No
+Backup previously generated files when re-generating : No
+Delete previously generated files when not re-generated : Yes
+Set all free pins as analog (to optimize the power consumption) : No
+
+
+Toolchains Settings : 
+Compiler Optimizations : 
+
+
+
+
+

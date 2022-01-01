@@ -27,20 +27,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-uint8_t CAN_ID = 0;
 
- typedef struct CANBUS_HANDLE_TAG{
-	FDCAN_HandleTypeDef     CanHandle;
-	FDCAN_TxHeaderTypeDef   TxHeader;
-	FDCAN_RxHeaderTypeDef   RxHeader;
-	uint8_t               TxData[8];
-	uint8_t               RxData[8];
-	uint32_t              TxMailbox;
- }CANBUS_HANDLE;
- CANBUS_HANDLE canbus;
-
-
- uint8_t utxbuf[100];
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -109,27 +96,10 @@ int main(void)
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
 
-  if (1)
-    {
-     /* Execute the IAP driver in order to reprogram the Flash */
-      canConfig();
-      /* Display main menu */
-      Main_Menu ();
-    }
-    /* Keep the user application running */
-    else
-    {
-      /* Test if user code is programmed starting from address "APPLICATION_ADDRESS" */
-      if (((*(__IO uint32_t*)APPLICATION_ADDRESS) & 0x2FFE0000 ) == 0x20000000)
-      {
-        /* Jump to user application */
-        JumpAddress = *(__IO uint32_t*) (APPLICATION_ADDRESS + 4);
-        JumpToApplication = (pFunction) JumpAddress;
-        /* Initialize user application's Stack Pointer */
-        __set_MSP(*(__IO uint32_t*) APPLICATION_ADDRESS);
-        JumpToApplication();
-      }
-    }
+   canConfig();
+
+   IAP_Menu(10000); //10 000 ms before jump
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -273,108 +243,24 @@ static void MX_FDCAN1_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
-  LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA);
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin : PB6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF0_USART1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
 
 /* USER CODE BEGIN 4 */
-void canConfig() {
 
-	 canbus.CanHandle = hfdcan1;
-	 FDCAN_FilterTypeDef sFilterConfig;
-
-	 /* Configure reception filter to Rx FIFO 0 */
-	  sFilterConfig.IdType = FDCAN_STANDARD_ID;
-	  sFilterConfig.FilterIndex = 0;
-	  sFilterConfig.FilterType = FDCAN_FILTER_MASK;
-	  sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-	  //only receive IDs with last 8 bits identical to 0 (filtering out normal nodes on can network)
-	  sFilterConfig.FilterID1 = (uint16_t) (0x0700); //filter ID
-	  sFilterConfig.FilterID2 = (uint16_t) (0x00FF); //high bits indicate a must-match with filter ID corresponding bits
-	  if (HAL_FDCAN_ConfigFilter(&canbus.CanHandle, &sFilterConfig) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-	  /* Configure global filter:
-	     Filter all remote frames with STD and EXT ID
-	     Reject non matching frames with STD ID and EXT ID */
-	  if (HAL_FDCAN_ConfigGlobalFilter(&canbus.CanHandle, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-
-	  /* Activate Rx FIFO 0 new message notification */
-	  if (HAL_FDCAN_ActivateNotification(&canbus.CanHandle, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-
-	  /* Configure and enable Tx Delay Compensation, required for BRS mode.
-	     TdcOffset default recommended value: DataTimeSeg1 * DataPrescaler
-	     TdcFilter default recommended value: 0 */
-	  if (HAL_FDCAN_ConfigTxDelayCompensation(&canbus.CanHandle, 5, 0) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-	  if (HAL_FDCAN_EnableTxDelayCompensation(&canbus.CanHandle) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-
-	  /* Start the FDCAN module */
-	  if (HAL_FDCAN_Start(&canbus.CanHandle) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-}
-
-void canSend() {
-	 /* Prepare Tx message Header */
-	canbus.TxHeader.Identifier = CAN_ID;
-	canbus.TxHeader.IdType = FDCAN_STANDARD_ID;
-	canbus.TxHeader.TxFrameType = FDCAN_DATA_FRAME;
-	canbus.TxHeader.DataLength = FDCAN_DLC_BYTES_8;
-	canbus.TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-	canbus.TxHeader.BitRateSwitch = FDCAN_BRS_OFF;    //Need to change in case of CANFD
-	canbus.TxHeader.FDFormat = FDCAN_CLASSIC_CAN;//Need to change in case of CANFD
-	canbus.TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-	canbus.TxHeader.MessageMarker = 0;
-
-	canbus.TxData[0]=1;
-	canbus.TxData[1]=2;
-	canbus.TxData[2]=3;
-	canbus.TxData[3]=4;
-	canbus.TxData[4]=5;
-	canbus.TxData[5]=6;
-	canbus.TxData[6]=7;
-	canbus.TxData[7]=8;
-
-	/* Start the Transmission process */
-	  if (HAL_FDCAN_AddMessageToTxFifoQ(&canbus.CanHandle, &(canbus.TxHeader), canbus.TxData) != HAL_OK)
-		{
-		  Error_Handler();
-		}
-}
-
-void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
-{
-	if((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
-	  {
-	    /* Retrieve Rx messages from RX FIFO0 */
-	    if (HAL_FDCAN_GetRxMessage(&canbus.CanHandle, FDCAN_RX_FIFO0, &canbus.RxHeader, canbus.RxData) != HAL_OK)
-	    {
-	      Error_Handler();
-	    }
-
-		//handle Rx Frame
-
-
-
-
-	  }
-}
 
 
 
