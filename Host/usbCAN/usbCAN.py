@@ -1,8 +1,7 @@
 from ctypes import *
 import threading
 import queue
-
-
+import time
 
 
 COM_OK       = 0
@@ -52,7 +51,11 @@ class USB_CAN:
         self.threads=[]
         self.kbdQueue = queue.Queue()
 
-        self.rxbuf=[]
+        self.rxQueue = queue.Queue()
+        self.rxTimeout=10
+
+        self.latestRxData=bytearray()
+        self.latestRxDataLen=0
 
         rx_vci_can_obj_type = VCI_CAN_OBJ*2500
         self.rx_vci_can_obj = rx_vci_can_obj_type()
@@ -60,9 +63,11 @@ class USB_CAN:
         self.tx_vci_can_obj = VCI_CAN_OBJ()
 
         ret = self.canDLL.VCI_OpenDevice(self.VCI_USBCAN2, 0, 0)
+
         if ret == self.STATUS_OK:
             print('Open USB_CAN Device successful')
-
+            ret = self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 0)
+            ret = self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 1)
         else:
             print('Open USB_CAN Device failed')
 
@@ -79,6 +84,7 @@ class USB_CAN:
         ret = self.canDLL.VCI_StartCAN(self.VCI_USBCAN2, 0, chn)
         if ret == self.STATUS_OK:
             self.channelStatus[chn] = 1
+            ret = self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, chn)
         else:
             print('Start CAN Channel {} fail'.format(chn))
         return ret
@@ -104,14 +110,6 @@ class USB_CAN:
                 if (len(input_str) > 0):
                     self.kbdQueue.put(input_str)
                     #customize terminal input action here
-                    self.inputHex=input_str.encode('utf-8')
-                    self.transmit(self.inputHex,len(self.inputHex))
-                    
-
-
-
-
-
 
             except:
                 print("quit keyboard thread")
@@ -131,23 +129,26 @@ class USB_CAN:
     def receiving_thread(self, chn=0):
         if(self.channelStatus[chn] == 1):
             while(self.receiving_alive):
-                try:
-                    rxNB=0
-                    #Show Rx
-                    while rxNB <= 0 and self.receiving_alive:
-                        rxNB = self.canDLL.VCI_Receive(self.VCI_USBCAN2, 0, chn, byref(self.rx_vci_can_obj), 2500, 0)
-                        #print("Wait Rx")
-                        # aa+=1
-                    for i in range (rxNB):
-                        
-                        #customize receiving action here
-                        #print("CAN channel {} Receive ID:{}, Len:{}, Data: {} ".format(chn,self.rx_vci_can_obj[i].ID,self.rx_vci_can_obj[i].DataLen,list(self.rx_vci_can_obj[i].Data)))
-                        dlen=self.rx_vci_can_obj[i].DataLen
-                        print("NB={}, dalaLen={}".format(rxNB,dlen))
-                        print(bytearray(self.rx_vci_can_obj[i].Data[:dlen]).decode(), end='', flush=True)
-                except:
-                    print("quit receiving thread")
-                break
+                rxNB=0
+                #Show Rx
+                while rxNB <= 0 and self.receiving_alive:
+                    rxNB = self.canDLL.VCI_Receive(self.VCI_USBCAN2, 0, chn, byref(self.rx_vci_can_obj), 2500, 0)
+                    #print("Wait Rx")
+                    # aa+=1
+                for i in range (rxNB):
+                    
+                    #customize receiving action here
+                    #print("CAN channel {} Receive ID:{}, Len:{}, Data: {} ".format(chn,self.rx_vci_can_obj[i].ID,self.rx_vci_can_obj[i].DataLen,list(self.rx_vci_can_obj[i].Data)))
+                    dlen=self.rx_vci_can_obj[i].DataLen
+                    #print("Rx dalaLen={}".format(dlen))
+                    dlc=bytearray(self.rx_vci_can_obj[i].Data[:dlen])
+                    for dlctata in dlc:
+                        self.rxQueue.put(dlctata)
+                    print(dlc.decode(), end='', flush=True)
+                    print("dlc={}".format(dlc))
+                    
+                rxNB=0
+
 
         else:
             print("Rx Channel {} Not opened".format(chn))
@@ -183,35 +184,28 @@ class USB_CAN:
             print("Tx Frame timeout")
             return COM_TIMEOUT
 
-    def receive(self,pdata,num,chn=0):
-        try:
-            if(self.channelStatus[chn] == 1):
-                ret=COM_OK
-                rxNB=0
-                numRd=0
-                pdataInd=0
-                while(pdataInd<num):
+    def clearRxBuffer(self):
+        self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 0)
+        self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 1)
+        while(self.rxQueue.qsize()!=0):
+            self.rxQueue.get()
 
-                        #get all buffered Rx frames
-                        while rxNB <= 0:
-                            rxNB = self.canDLL.VCI_Receive(self.VCI_USBCAN2, 0, chn, byref(self.rx_vci_can_obj), 2500, 0)
-                        
-                        #copy Rx datas into pdata
-                        for i in range(rxNB):
-                            for j in range(self.rx_vci_can_obj[i].DataLen):
-                                pdata[pdataInd]=self.rx_vci_can_obj[i].Data[j]
-                                pdataInd+=1
-                                if(pdataInd>num):
-                                    ret=COM_ERROR
-                                    return ret
-                        #reset rx num           
-                        rxNB=0
-                return ret                    
-            else:
-                return COM_ERROR
-        except TimeoutError:
-            print("Rx timeout")
-            return COM_TIMEOUT
+
+    def receive(self,pdata,num,chn=0):
+        dataInd=0
+        print("Size of Rx queue: {}".format(self.rxQueue.qsize()))
+        tstart=time.time()
+        while(dataInd<num):
+            if(self.rxQueue.qsize()!=0):
+                pdata[dataInd]=self.rxQueue.get()
+                dataInd+=1
+                if(dataInd==num):
+                    return COM_OK
+            if(time.time()-tstart>self.rxTimeout):
+                return COM_TIMEOUT
+
+
+
 
     def close(self):
         ret = self.canDLL.VCI_CloseDevice(self.VCI_USBCAN2, 0)

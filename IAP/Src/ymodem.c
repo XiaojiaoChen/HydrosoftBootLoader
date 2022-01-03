@@ -70,9 +70,11 @@ static HAL_StatusTypeDef ReceivePacket(uint8_t *p_data, uint32_t *p_length, uint
   uint32_t packet_size = 0;
   HAL_StatusTypeDef status;
   uint8_t char1;
-
+  uint8_t bb[1000];
   *p_length = 0;
+
   status = FDCAN_Receive(&char1, 1, timeout);
+  //status = FDCAN_Receive(bb, 1000, timeout);
 
   if (status == HAL_OK)
   {
@@ -310,6 +312,7 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
     file_done = 0;
     while ((file_done == 0) && (result == COM_OK))
     {
+
       switch (ReceivePacket(aPacketData, &packet_length, DOWNLOAD_TIMEOUT))
       {
         case HAL_OK:
@@ -369,15 +372,18 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
                       result = COM_LIMIT;
                     }
                     /* erase user application area */
-                    FLASH_If_Erase(APPLICATION_ADDRESS);
+                    uint32_t eraseStatus;
+                    eraseStatus = FLASH_If_Erase(APPLICATION_ADDRESS);
                     *p_size = filesize;
 
+                	FDCAN_ClearRxBuffer();
                     FDCAN_PutByte(ACK);
                     FDCAN_PutByte(CRC16);
                   }
                   /* File header packet is empty, end session */
                   else
                   {
+                  	FDCAN_ClearRxBuffer();
                     FDCAN_PutByte(ACK);
                     file_done = 1;
                     session_done = 1;
@@ -392,6 +398,8 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
                   if (FLASH_If_Write(flashdestination, (uint32_t*) ramsource, packet_length/8) == FLASHIF_OK)
                   {
                     flashdestination += packet_length;
+                	/*After programming, clear the buffer for a clean packet reception*/
+                	FDCAN_ClearRxBuffer();
                     FDCAN_PutByte(ACK);
                   }
                   else /* An error occurred while writing to Flash memory */
@@ -426,6 +434,8 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
           }
           else
           {
+        	/* before asking Ask for a packet, clear the buffer for a clean packet */
+        	FDCAN_ClearRxBuffer();
             FDCAN_PutByte(CRC16); /* Ask for a packet */
           }
           break;

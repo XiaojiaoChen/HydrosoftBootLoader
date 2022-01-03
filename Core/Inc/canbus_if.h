@@ -10,6 +10,7 @@
 
 #include "main.h"
 
+#include "myQueue.h"
 
 
  typedef struct CANBUS_HANDLE_TAG{
@@ -18,12 +19,13 @@
 	FDCAN_RxHeaderTypeDef   RxHeader;
 	uint8_t               TxData[8];
 	uint8_t               RxData[8];
+	MYQUEUE				  RxQueue;
 	uint32_t              TxMailbox;
  }CANBUS_HANDLE;
  extern CANBUS_HANDLE canbus;
 
  HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int16_t num,uint32_t timeout);
  HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout);
-
+ void FDCAN_ClearRxBuffer();
 
 #endif /* INC_CANBUS_IF_H_ */

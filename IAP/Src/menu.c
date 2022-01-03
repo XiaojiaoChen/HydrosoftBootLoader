@@ -86,9 +86,6 @@ void SerialDownload(void) {
 	uint8_t number[11] = { 0 };
 	uint32_t size = 0;
 	COM_StatusTypeDef result;
-
-	FDCAN_PutString(
-			"Waiting for the file to be sent ... (press 'a' to abort)\n\r");
 	result = Ymodem_Receive(&size);
 	if (result == COM_OK) {
 		FDCAN_PutString(
@@ -143,7 +140,7 @@ void SerialUpload(void) {
 void IAP_Menu(uint32_t timeBeforeJumpMs) {
 	uint8_t defaultKeyValue = 'a';
 	uint8_t key = defaultKeyValue;
-	uint8_t holdon = 0;
+	uint8_t holdon = 1;
 	FDCAN_PutString(
 			"\r\n======================================================================");
 	FDCAN_PutString(
@@ -216,7 +213,7 @@ void IAP_Menu(uint32_t timeBeforeJumpMs) {
 		}
 
 		/* Receive key , ms interval for check input char */
-		if (FDCAN_Receive(&key, 1, 1) == HAL_OK) {
+		if (FDCAN_Receive(&key, 1, 10) == HAL_OK) {
 			switch (key) {
 			case '0':
 				/* stop the timeout clock and hold on here*/
@@ -237,8 +234,8 @@ void IAP_Menu(uint32_t timeBeforeJumpMs) {
 				JumpToApp();
 				break;
 			default:
-				FDCAN_PutString(
-						"Invalid Number ! ==> The number should be either 0, 1, 2 or 3 \r\n");
+//				FDCAN_PutString(
+//						"Invalid Number ! ==> The number should be either 0, 1, 2 or 3 \r\n");
 				break;
 			}
 
