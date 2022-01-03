@@ -143,7 +143,7 @@ void SerialUpload(void) {
 void IAP_Menu(uint32_t timeBeforeJumpMs) {
 	uint8_t defaultKeyValue = 'a';
 	uint8_t key = defaultKeyValue;
-	uint8_t holdon = 1;
+	uint8_t holdon = 0;
 	FDCAN_PutString(
 			"\r\n======================================================================");
 	FDCAN_PutString(

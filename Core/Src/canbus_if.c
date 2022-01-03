@@ -9,8 +9,10 @@
 
 
 
-uint16_t CAN_ID = 0;
-uint16_t CAN_ID_MASTER = 0x0700;
+uint16_t CAN_ID = 0; //Change
+
+
+#define MASTER_CAN_ID  0x0400   //Master ID is 0x0400
 
 
 CANBUS_HANDLE canbus;
@@ -24,11 +26,11 @@ void canConfig() {
 	 /* Configure reception filter to Rx FIFO 0 */
 	  sFilterConfig.IdType = FDCAN_STANDARD_ID;
 	  sFilterConfig.FilterIndex = 0;
-	  sFilterConfig.FilterType = FDCAN_FILTER_MASK;
+	  sFilterConfig.FilterType = FDCAN_FILTER_DUAL;
 	  sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-	  //only receive IDs that coincide CAN_ID_MASTER bits
-	  sFilterConfig.FilterID1 = (uint16_t) CAN_ID_MASTER; //
-	  sFilterConfig.FilterID2 = (uint16_t) CAN_ID_MASTER; //high bits indicate a must-match with filter ID corresponding bits
+	  //only receive two ID, Master general call and P2P call
+	  sFilterConfig.FilterID1 = (uint16_t) (MASTER_CAN_ID | CAN_ID); // Master P2P call
+	  sFilterConfig.FilterID2 = (uint16_t) MASTER_CAN_ID; //Master general call
 	  if (HAL_FDCAN_ConfigFilter(&canbus.CanHandle, &sFilterConfig) != HAL_OK)
 	  {
 	    Error_Handler();
@@ -127,26 +129,8 @@ HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int16_t num,uint32_t timeout)
 }
 
 
-void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
-{
-	if((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
-	  {
-	    /* Retrieve Rx messages from RX FIFO0 */
-	    if (HAL_FDCAN_GetRxMessage(&canbus.CanHandle, FDCAN_RX_FIFO0, &canbus.RxHeader, canbus.RxData) != HAL_OK)
-	    {
-	      Error_Handler();
-	    }
-
-		//handle Rx Frame
-
-
-
-	  }
-}
-
-
 /*Only suit DLC<=8 bytes*/
-HAL_StatusTypeDef FDCAN_Receive_One_Frame(uint8_t *p_string,int16_t num,uint32_t timeout){
+HAL_StatusTypeDef FDCAN_Receive_One_Frame(uint8_t *p_string,uint32_t timeout){
 	HAL_StatusTypeDef status=HAL_OK;
 	uint32_t tstart=HAL_GetTick();
 	while(HAL_FDCAN_GetRxFifoFillLevel(&canbus.CanHandle, FDCAN_RX_FIFO0)==0){
@@ -161,22 +145,36 @@ HAL_StatusTypeDef FDCAN_Receive_One_Frame(uint8_t *p_string,int16_t num,uint32_t
 			p_string[i]=canbus.RxData[i];
 		}
 	}
-
 	return status;
-
 }
 
 HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout){
 	HAL_StatusTypeDef status=HAL_OK;
-	uint32_t frameNB=num/8;
-	uint32_t remBytesNB=num%8;
-	uint8_t timeoutInd=timeout/8;
-	for(int i=0;i<frameNB && (status==HAL_OK);i++){
-		status = FDCAN_Receive_One_Frame(p_string,8,timeoutInd);
-		p_string+=8;
-	}
-	if(status==HAL_OK && remBytesNB!=0){
-		status = FDCAN_Receive_One_Frame(p_string,remBytesNB,timeoutInd);
+
+	uint32_t pdataInd=0;
+	uint32_t tstart = HAL_GetTick();
+	while(pdataInd<num){
+
+		/*wait until rx not empty*/
+		while(HAL_FDCAN_GetRxFifoFillLevel(&canbus.CanHandle, FDCAN_RX_FIFO0)==0){
+				if(HAL_GetTick()-tstart>timeout){
+					status = HAL_TIMEOUT;
+					return status;
+				}
+			}
+
+		/*read a frame, copy to current pstring pointer*/
+		if (HAL_FDCAN_GetRxMessage(&canbus.CanHandle, FDCAN_RX_FIFO0, &canbus.RxHeader, canbus.RxData) != HAL_OK){
+			uint32_t bytesNB = (canbus.RxHeader.DataLength)>>16;
+			for(int i=0;i<bytesNB;i++){
+				p_string[pdataInd++]=canbus.RxData[i];
+			}
+		}
+
+		/*check ending*/
+		if(pdataInd>num){
+			status = HAL_ERROR;
+		}
 	}
 
 	return status;
