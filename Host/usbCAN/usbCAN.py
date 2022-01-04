@@ -96,7 +96,7 @@ class USB_CAN:
         self.keyboard_alive = 1
         print('Ready for keyboard input:')
         self.keyboardThread = threading.Thread(target=self.keyboard_thread)
-        self.threads.append(self.keyboard_thread)
+        self.threads.append(self.keyboardThread)
         self.keyboardThread.start()
         
     def getInput(self):
@@ -143,7 +143,7 @@ class USB_CAN:
                     dlc=bytearray(self.rx_vci_can_obj[i].Data[:dlen])
                     for dlctata in dlc:
                         self.rxQueue.put(dlctata)
-                    print(dlc.decode(), end='', flush=True)
+                    print(dlc.decode('iso-8859-1'), end='', flush=True)
                     #print("dlc={}".format(dlc))
                 rxNB=0
         else:
@@ -209,7 +209,7 @@ class USB_CAN:
         self.receiving_alive=0
         self.keyboard_alive=0
         for threadOb in self.threads:
-            threadOb.join()
+            threadOb.join(1)
         
 if __name__ == "__main__":
     usbcan = USB_CAN()

@@ -215,11 +215,24 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void deInitAll(void){
+
+	  HAL_FDCAN_DeInit(&hfdcan1);
+	  LL_IOP_GRP1_DisableClock(LL_IOP_GRP1_PERIPH_GPIOA);//HAL_GPIO_DeInit();
+
+	__HAL_RCC_PWR_CLK_DISABLE();
+	HAL_RCC_DeInit();
 
 
 
+	HAL_DeInit();
 
+	//HAL_SuspendTick();
+	SysTick->CTRL = 0;
+	SysTick->LOAD = 0;
+	SysTick->VAL = 0;
 
+}
 
 /* USER CODE END 4 */
 

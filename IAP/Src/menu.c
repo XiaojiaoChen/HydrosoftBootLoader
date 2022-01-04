@@ -69,13 +69,14 @@ HAL_StatusTypeDef SerialUpload(void);
 
 void JumpToApp() {
 
+	//before jump, deinitialize all the possible things
+	deInitAll();
+
 	/* execute the new program */
 	JumpAddress = *(__IO uint32_t*) (APPLICATION_ADDRESS + 4);
 
 	/* Jump to user application */
 	JumpToApplication = (pFunction) JumpAddress;
-
-	SCB->VTOR = APPLICATION_ADDRESS;
 
 	/* Initialize user application's Stack Pointer */
 	__set_MSP(*(__IO uint32_t*) APPLICATION_ADDRESS);
@@ -125,14 +126,19 @@ void IAP_Menu() {
 	uint8_t defaultKeyValue = 'a';
 	uint8_t key = defaultKeyValue;
 	uint8_t holdon = 0;
-	FDCAN_PutString(
-			"\r\n=================== Main Menu ============================\r\n\n");
-	FDCAN_PutString("  Jump to application                  ----------------- 0\r\n\n");
-	FDCAN_PutString("  Download image to the internal Flash ----------------- 1\r\n\n");
-
 	uint32_t tstart = HAL_GetTick();
 	int32_t lastT=0;
 	uint8_t tick[10]={0};
+	uint8_t canIDStr[5]={0};
+	Int2Str(canIDStr,(CAN_ID));
+
+	FDCAN_PutString("\r\n=================== CAN_ID = ");
+	FDCAN_PutString((char *)canIDStr);
+	FDCAN_PutString(" =======================\r\n\n");
+	FDCAN_PutString("  Jump to application                  ----------------- 0\r\n\n");
+	FDCAN_PutString("  Download image to the internal Flash ----------------- 1\r\n\n");
+	FDCAN_PutString("  hold                                 ----------------- 2\r\n\n");
+
 	while (1) {
 
 		/* Clean the input path */
@@ -174,7 +180,12 @@ void IAP_Menu() {
 					FDCAN_ClearRxBuffer();
 				}
 				break;
-
+			case '2':
+				/* Just hold, waiting for further instruction */
+				holdon = 1;
+				FDCAN_PutString((char *)canIDStr);
+				FDCAN_PutString("  is holding on, waiting for furthur instructions..\r\n");
+				break;
 			default:
 
 				break;

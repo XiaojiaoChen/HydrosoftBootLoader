@@ -46,7 +46,7 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
+void deInitAll();
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/

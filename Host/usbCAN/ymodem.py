@@ -58,6 +58,7 @@ aPacketData=bytearray(PACKET_1K_SIZE + PACKET_DATA_INDEX + PACKET_TRAILER_SIZE)
 #p_data is a bytearray
 #p_file_name is a string
 
+
 def PrepareIntialPacket(p_data, p_file_name, length):
 
     p_data[PACKET_START_INDEX] = SOH
@@ -151,17 +152,13 @@ def Ymodem_Transmit(filePath):
 
 
 
-
+  canbus.clearRxBuffer()
   tx_ctrl=bytearray(2)
   bchar='1'
   tx_ctrl[:1]=bchar.encode('utf-8')
-
-  canbus.clearRxBuffer()
-  print("Before Tx,  Size of Rx queue: {}".format(canbus.rxQueue.qsize()))
   canbus.transmit(tx_ctrl,1)
-  print("transmit 1")
+  print("Sending Flahs Request...")
 
-  print("Before Rx,  Size of Rx queue: {}".format(canbus.rxQueue.qsize()))
   while(a_rx_ctrl[0]!=CRC16):
     canbus.receive(a_rx_ctrl, 1)
     time.sleep(0.01)
@@ -347,8 +344,21 @@ def run():
 
   binPath="hydrosoft_IMU_V3.bin"
 
-  if(canbus.getInput()=='1'):
-    time.sleep(0.1)
-    Ymodem_Transmit(binPath)
+  try:
+    while(True):
+      if(canbus.getInput()=='1'):
+        canbus.clearRxBuffer()
+        time.sleep(0.1)
+        Ymodem_Transmit(binPath)
+      elif(canbus.getInput()=='0'):
+        canbus.clearRxBuffer()
+        time.sleep(0.1)
+        tx_ctrl=bytearray(2)
+        bchar='0'
+        tx_ctrl[:1]=bchar.encode('utf-8')
+        canbus.transmit(tx_ctrl,1)
+        print("Sending Start Request...")
+  except KeyboardInterrupt:
+    canbus.close()
 
 run()
