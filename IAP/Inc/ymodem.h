@@ -81,12 +81,12 @@ typedef enum
 #define ABORT2                  ((uint8_t)0x61)  /* 'a' == 0x61, abort by user */
 
 #define NAK_TIMEOUT             ((uint32_t)0x100000)
-#define DOWNLOAD_TIMEOUT        ((uint32_t)5000) /* One second retry delay */
+#define DOWNLOAD_TIMEOUT        ((uint32_t)50000) /* One second retry delay */
 #define MAX_ERRORS              ((uint32_t)5)
 
 /* Exported functions ------------------------------------------------------- */
 COM_StatusTypeDef Ymodem_Receive(uint32_t *p_size);
-COM_StatusTypeDef Ymodem_Transmit(uint8_t *p_buf, const uint8_t *p_file_name, uint32_t file_size);
+//COM_StatusTypeDef Ymodem_Transmit(uint8_t *p_buf, const uint8_t *p_file_name, uint32_t file_size);
 
 #endif  /* __YMODEM_H_ */
 

@@ -41,7 +41,8 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "flash_if.h"
-
+#include "common.h"
+#include "stdio.h"
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -115,7 +116,7 @@ uint32_t FLASH_If_Erase(uint32_t startAdd)
   * @note   After writing data buffer, the flash content is checked.
   * @param  destination: start address for target location
   * @param  p_source: pointer on buffer with data to write
-  * @param  length: length of data buffer (unit is 64-bit word)
+  * @param  length: length of bytes
   * @retval uint32_t 0: Data successfully written to Flash memory
   *         1: Error occurred while writing data in Flash memory
   *         2: Written Data in flash memory is different from expected one
@@ -146,6 +147,9 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
         return(FLASHIF_WRITINGCTRL_ERROR);
       }
       /* Increment FLASH destination address */
+//      uint8_t buf[100];
+//      sprintf(buf,"Write Flash at %x \n",destination);
+//      FDCAN_PutString(buf);
       destination += 8;
     }
     else
@@ -161,8 +165,62 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
 
   return (FLASHIF_OK);
 }
-
-
+//
+///* Public functions ---------------------------------------------------------*/
+///**
+//  * @brief  This function writes a data buffer in flash (data are 64-bit aligned).
+//  * @note   After writing data buffer, the flash content is checked.
+//  * @param  destination: start address for target location
+//  * @param  p_source: pointer on buffer with data to write
+//  * @param  length: length of data buffer (unit is 64-bit word)
+//  * @retval uint32_t 0: Data successfully written to Flash memory
+//  *         1: Error occurred while writing data in Flash memory
+//  *         2: Written Data in flash memory is different from expected one
+//  */
+//uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t length)
+//{
+//  uint32_t i = 0;
+//  uint64_t *p_source64= (uint64_t*)(p_source);
+//  uint64_t *p_des64=(uint64_t*)(destination);
+//  /* Unlock the Flash to enable the flash control register access *************/
+//  HAL_FLASH_Unlock();
+//
+//  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
+//  {
+//    /* Device voltage range supposed to be [2.7V to 3.6V], the operation will
+//       be done by word */
+//	  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, destination, *(uint64_t*)(p_source64 + i )) == HAL_OK)
+//    {
+//     /* Check the written value */
+//		uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
+//		uint32_t *p_sourceCur32 = (uint32_t *)p_sourceCur64;
+//		uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
+//		uint32_t *p_desCur32 = (uint32_t *)p_desCur64;
+//      if ((*(uint32_t*)p_desCur32 != *(uint32_t*)p_sourceCur32) ||
+//    	  (*(uint32_t*)(p_desCur32+1) != *(uint32_t*)(p_sourceCur32+1)) )
+//      {
+//        /* Flash content doesn't match SRAM content */
+//        return(FLASHIF_WRITINGCTRL_ERROR);
+//      }
+//      /* Increment FLASH destination address */
+//      uint8_t buf[100];
+//      sprintf(buf,"Write Flash at %x \n",p_des64);
+//      FDCAN_PutString(buf);
+//      destination += 8;
+//    }
+//    else
+//    {
+//      /* Error occurred while writing data in Flash memory */
+//      return (FLASHIF_WRITING_ERROR);
+//    }
+//  }
+//
+//  /* Lock the Flash to disable the flash control register access (recommended
+//     to protect the FLASH memory against possible unwanted operation) *********/
+//  HAL_FLASH_Lock();
+//
+//  return (FLASHIF_OK);
+//}
 
 /**
   * @brief  Gets the page of a given address

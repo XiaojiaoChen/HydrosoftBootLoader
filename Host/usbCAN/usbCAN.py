@@ -145,7 +145,6 @@ class USB_CAN:
                         self.rxQueue.put(dlctata)
                     print(dlc.decode(), end='', flush=True)
                     #print("dlc={}".format(dlc))
-                    
                 rxNB=0
         else:
             print("Rx Channel {} Not opened".format(chn))
@@ -159,6 +158,7 @@ class USB_CAN:
             if(ret==COM_OK):
                 ret = self.transmit_Frame(pdata[pdataInd:],8)
                 pdataInd+=8
+                time.sleep(0.0001)
         if(ret==COM_OK and remBytesNB!=0):
             ret = self.transmit_Frame(pdata[pdataInd:],remBytesNB)
         return ret

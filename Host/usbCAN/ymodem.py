@@ -168,7 +168,6 @@ def Ymodem_Transmit(filePath):
 
 
   #Prepare first block - header */
-  print("prepareing Init Packet")
   PrepareIntialPacket(aPacketData, p_file_name, file_size)
 
   while((ack_recpt==0 ) and ( result == COM_OK )):
@@ -180,15 +179,13 @@ def Ymodem_Transmit(filePath):
     temp_crc = Cal_CRC16(aPacketData[PACKET_DATA_INDEX:], PACKET_SIZE)
     canbus.transmit([(temp_crc >> 8)],1)
     canbus.transmit([temp_crc & 0xFF],1)
-    print("Sending Init CRC = {}, high={}, low={}".format(temp_crc,temp_crc >> 8,temp_crc & 0xFF))
 
-   
     #Wait for Ack and 'C' */
     if (canbus.receive(a_rx_ctrl, 1) == COM_OK):
       if (a_rx_ctrl[0] == ACK):
-        print("Get ACK")
+        # print("Get ACK")
         canbus.receive(a_rx_ctrl, 1)
-        print("Then Get {}".format(a_rx_ctrl[0]))
+        print("Get ACK and {}".format(a_rx_ctrl[0]))
         ack_recpt = 1
       elif (a_rx_ctrl[0] == CA):
         print("Get CA")
@@ -209,18 +206,19 @@ def Ymodem_Transmit(filePath):
   p_buf_int = 0
   size = file_size
 
-
+  packetNum=0
+  packetTotal = size//1024+1
 
   #Here 1024 bytes length is used to send the packets */
   while ((size) and (result == COM_OK )):
-  
+    
     #Prepare next packet */
-    print("prepare data packet")
     PreparePacket(p_buf[p_buf_int:], aPacketData, blk_number, size)
     ack_recpt = 0
     a_rx_ctrl[0] = 0
     errors = 0
-
+    packetNum +=1
+    curT1=time.time_ns()//1000000
     #Resend packet if 'C' is received else end of communication */
     while (( ack_recpt==0 ) and ( result == COM_OK )):
     
@@ -235,23 +233,26 @@ def Ymodem_Transmit(filePath):
       
       #before sending every packet, clear the rx buffer in case of multiple 'c'
       canbus.clearRxBuffer()
+      dtPacket1 = time.time_ns()//1000000 - curT1
+      curT1=time.time_ns()//1000000
 
-      print("sending data packet")
+      # print("Sending data packet ({}/{})...".format(packetNum,packetTotal))
       canbus.transmit(aPacketData[PACKET_START_INDEX:], pkt_size + PACKET_HEADER_SIZE)
-      
       #Send CRC or Check Sum based on CRC16_F */
-
       temp_crc = Cal_CRC16(aPacketData[PACKET_DATA_INDEX:], pkt_size)
       canbus.transmit([temp_crc >> 8],1)
       canbus.transmit([temp_crc & 0xFF],1)
-      print("Sending Data CRC = 0x{:X}, high=0x{:X}, low=0x{:X}, errors={}".format(temp_crc,temp_crc >> 8,temp_crc & 0xFF,errors))
+      dtPacket2 = time.time_ns()//1000000 - curT1
+      # print("Sent after {} ms ".format(dtPacket2),end="")
+
 
       #Wait for Ack */
       rret = canbus.receive(a_rx_ctrl, 1)
       if ( rret== COM_OK):
           
           if (a_rx_ctrl[0] == ACK):
-            print("get ACK")
+            dtPacket3 = time.time_ns()//1000000 - curT1
+            print("Tx={} ms; ACK={} ms; Data Packet Sent({}/{}) ".format(dtPacket2,dtPacket3-dtPacket2,packetNum,packetTotal))
             ack_recpt = 1
             if (size > pkt_size):
               p_buf_int += pkt_size
@@ -294,10 +295,10 @@ def Ymodem_Transmit(filePath):
     if (canbus.receive(a_rx_ctrl, 1) == COM_OK):
       
       if (a_rx_ctrl[0] == ACK):
-        print("Get EOT ACK")
+        print("Get ACK")
         ack_recpt = 1
       elif (a_rx_ctrl[0] == CA):
-        print("Get EOT CA")
+        print("Get CA")
         if ((canbus.receive(a_rx_ctrl, 1) == COM_OK) and (a_rx_ctrl[0] == CA)):
           time.sleep( 2 )
           result = COM_ABORT

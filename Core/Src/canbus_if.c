@@ -20,8 +20,6 @@ extern FDCAN_HandleTypeDef hfdcan1;
 
 void canConfig() {
 
-	 queue_init(&canbus.RxQueue);
-
 	 canbus.CanHandle = hfdcan1;
 	 FDCAN_FilterTypeDef sFilterConfig;
 
@@ -130,7 +128,7 @@ HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int16_t num,uint32_t timeout)
 	return status;
 }
 
-
+/*CAN Rx Interrupt Routine, into rx queue*/
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
   if((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
@@ -143,52 +141,27 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 
     /* Copy to buff */
      uint32_t bytesNB = (canbus.RxHeader.DataLength)>>16;
-	for(int i=0;i<bytesNB;i++){
-		queue_in(&canbus.RxQueue,canbus.RxData[i]);
-	}
+     if(queue_in_bulk(&canbus.RxQueue,&canbus.RxData[0],bytesNB)==HAL_ERROR){
+    	 int aa=1;
+    	 aa++;
+     }
   }
 }
 
-
-
-///*Only suit DLC<=8 bytes*/
-//HAL_StatusTypeDef FDCAN_Receive_One_Frame(uint8_t *p_string,uint32_t timeout){
-//	HAL_StatusTypeDef status=HAL_OK;
-//	uint32_t tstart=HAL_GetTick();
-//	while(HAL_FDCAN_GetRxFifoFillLevel(&canbus.CanHandle, FDCAN_RX_FIFO0)==0){
-//		if(HAL_GetTick()-tstart>timeout){
-//			status = HAL_TIMEOUT;
-//			return status;
-//		}
-//	}
-//	if (HAL_FDCAN_GetRxMessage(&canbus.CanHandle, FDCAN_RX_FIFO0, &canbus.RxHeader, canbus.RxData) != HAL_OK){
-//		uint32_t bytesNB = (canbus.RxHeader.DataLength)>>16;
-//		for(int i=0;i<bytesNB;i++){
-//			p_string[i]=canbus.RxData[i];
-//		}
-//	}
-//	return status;
-//}
-//
-
+/*get Rx data from rx queue*/
 HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout){
-	HAL_StatusTypeDef status=HAL_OK;
 
-	uint32_t pdataInd=0;
 	uint32_t tstart = HAL_GetTick();
-	while(pdataInd<num){
-		if(!queue_isEmpty(&canbus.RxQueue)){
-			p_string[pdataInd++]=queue_out(&canbus.RxQueue);
-		}
+	while(queue_out_bulk(&canbus.RxQueue,p_string,num)!=HAL_OK){
 		if(HAL_GetTick()-tstart>timeout){
-			status = HAL_TIMEOUT;
-			break;
+			return HAL_TIMEOUT;
 		}
 	}
-	return status;
+	return HAL_OK;
 }
 
 void FDCAN_ClearRxBuffer(){
-	queue_init(&canbus.RxQueue);
+	canbus.RxQueue.count=0;
+	canbus.RxQueue.front=0;
+	canbus.RxQueue.rear=0;
 }
-
