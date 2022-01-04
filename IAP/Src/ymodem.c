@@ -125,7 +125,8 @@ static HAL_StatusTypeDef ReceivePacket(uint8_t *p_data, uint32_t *p_length, uint
           /* Check packet CRC */
           crc = p_data[ packet_size + PACKET_DATA_INDEX ] << 8;
           crc += p_data[ packet_size + PACKET_DATA_INDEX + 1 ];
-          if (Cal_CRC16(&p_data[PACKET_DATA_INDEX], packet_size) != crc )
+          uint32_t calcrc=Cal_CRC16(&p_data[PACKET_DATA_INDEX], packet_size);
+          if (calcrc != crc )
           {
             packet_size = 0;
             status = HAL_ERROR;
@@ -302,6 +303,9 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
   uint8_t *file_ptr;
   uint8_t file_size[FILE_SIZE_LENGTH], tmp, packets_received;
   COM_StatusTypeDef result = COM_OK;
+  uint32_t status=HAL_OK;
+  uint32_t haltimeout=0;
+  uint32_t halerror=0;
 
   /* Initialize flashdestination variable */
   flashdestination = APPLICATION_ADDRESS;
@@ -313,7 +317,7 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
     while ((file_done == 0) && (result == COM_OK))
     {
 
-      switch (ReceivePacket(aPacketData, &packet_length, DOWNLOAD_TIMEOUT))
+      switch (status = ReceivePacket(aPacketData, &packet_length, DOWNLOAD_TIMEOUT))
       {
         case HAL_OK:
           errors = 0;
@@ -421,6 +425,10 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
           FDCAN_PutByte(CA);
           result = COM_ABORT;
           break;
+        case HAL_TIMEOUT:
+        	haltimeout++;
+        case HAL_ERROR:
+        	halerror++;
         default:
           if (session_begin > 0)
           {

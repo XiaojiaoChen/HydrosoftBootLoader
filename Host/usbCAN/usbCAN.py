@@ -52,7 +52,7 @@ class USB_CAN:
         self.kbdQueue = queue.Queue()
 
         self.rxQueue = queue.Queue()
-        self.rxTimeout=10
+        self.rxTimeout=20
 
         self.latestRxData=bytearray()
         self.latestRxDataLen=0
@@ -136,7 +136,6 @@ class USB_CAN:
                     #print("Wait Rx")
                     # aa+=1
                 for i in range (rxNB):
-                    
                     #customize receiving action here
                     #print("CAN channel {} Receive ID:{}, Len:{}, Data: {} ".format(chn,self.rx_vci_can_obj[i].ID,self.rx_vci_can_obj[i].DataLen,list(self.rx_vci_can_obj[i].Data)))
                     dlen=self.rx_vci_can_obj[i].DataLen
@@ -145,11 +144,9 @@ class USB_CAN:
                     for dlctata in dlc:
                         self.rxQueue.put(dlctata)
                     print(dlc.decode(), end='', flush=True)
-                    print("dlc={}".format(dlc))
+                    #print("dlc={}".format(dlc))
                     
                 rxNB=0
-
-
         else:
             print("Rx Channel {} Not opened".format(chn))
 
@@ -193,7 +190,6 @@ class USB_CAN:
 
     def receive(self,pdata,num,chn=0):
         dataInd=0
-        print("Size of Rx queue: {}".format(self.rxQueue.qsize()))
         tstart=time.time()
         while(dataInd<num):
             if(self.rxQueue.qsize()!=0):

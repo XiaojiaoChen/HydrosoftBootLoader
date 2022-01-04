@@ -170,6 +170,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 //	return status;
 //}
 //
+
 HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout){
 	HAL_StatusTypeDef status=HAL_OK;
 

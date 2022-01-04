@@ -124,6 +124,7 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
 {
   uint32_t i = 0;
   uint64_t *p_source64= (uint64_t*)(p_source);
+  uint64_t *p_des64=(uint64_t*)(destination);
   /* Unlock the Flash to enable the flash control register access *************/
   HAL_FLASH_Unlock();
 
@@ -136,8 +137,10 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
      /* Check the written value */
 		uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
 		uint32_t *p_sourceCur32 = (uint32_t *)p_sourceCur64;
-      if ((*(uint32_t*)destination != *(uint32_t*)p_sourceCur32) ||
-    	  (*(uint32_t*)(destination+1) != *(uint32_t*)(p_sourceCur32+1)) )
+		uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
+		uint32_t *p_desCur32 = (uint32_t *)p_desCur64;
+      if ((*(uint32_t*)p_desCur32 != *(uint32_t*)p_sourceCur32) ||
+    	  (*(uint32_t*)(p_desCur32+1) != *(uint32_t*)(p_sourceCur32+1)) )
       {
         /* Flash content doesn't match SRAM content */
         return(FLASHIF_WRITINGCTRL_ERROR);

@@ -101,7 +101,7 @@ def PreparePacket(p_source, p_packet,pkt_nr,size_blk):
 
 def UpdateCRC16(crc_in, byte):
   crc = crc_in
-  inbyte = byte | 0x100
+  inbyte = byte | 0x00000100
   condition=1
   while(condition):
     crc <<= 1
@@ -221,7 +221,7 @@ def Ymodem_Transmit(filePath):
     a_rx_ctrl[0] = 0
     errors = 0
 
-    #Resend packet if NAK for few times else end of communication */
+    #Resend packet if 'C' is received else end of communication */
     while (( ack_recpt==0 ) and ( result == COM_OK )):
     
       #Send next packet */
@@ -244,10 +244,11 @@ def Ymodem_Transmit(filePath):
       temp_crc = Cal_CRC16(aPacketData[PACKET_DATA_INDEX:], pkt_size)
       canbus.transmit([temp_crc >> 8],1)
       canbus.transmit([temp_crc & 0xFF],1)
-      print("Sending Data CRC = {}, high={}, low={}, errors={}".format(temp_crc,temp_crc >> 8,temp_crc & 0xFF,errors))
+      print("Sending Data CRC = 0x{:X}, high=0x{:X}, low=0x{:X}, errors={}".format(temp_crc,temp_crc >> 8,temp_crc & 0xFF,errors))
 
       #Wait for Ack */
-      if (canbus.receive(a_rx_ctrl, 1) == COM_OK):
+      rret = canbus.receive(a_rx_ctrl, 1)
+      if ( rret== COM_OK):
           
           if (a_rx_ctrl[0] == ACK):
             print("get ACK")
@@ -267,8 +268,12 @@ def Ymodem_Transmit(filePath):
               if ((canbus.receive(a_rx_ctrl, 1) == COM_OK) and (a_rx_ctrl[0] == CA)):
                 time.sleep( 2 )
                 result = COM_ABORT
+          elif(a_rx_ctrl[0] == CRC16):
+            print("Get Resend request")
           else:
-              print("Get invaid ret code {}".format(a_rx_ctrl[0]))
+            print("Get invaid ret code {}".format(a_rx_ctrl[0]))
+      elif(rret==COM_TIMEOUT):
+        print("Timeout in rx char")
       else:
         print("Error in trans dat, get {}".format(a_rx_ctrl[0]))
         errors+=1
