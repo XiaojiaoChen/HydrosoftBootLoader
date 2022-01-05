@@ -7,9 +7,8 @@
 
 #include "canbus_if.h"
 
+const uint16_t CAN_ID=0x0000;
 
-
-uint16_t CAN_ID = 0; //Change
 
 #define MASTER_BROADCAST  0x07FF   //Master BroadCast ID
 #define MASTER_P2P_MASK   0x0400   //Master p2p Mask is 0x0400
@@ -26,11 +25,11 @@ void canConfig() {
 	 /* Configure reception filter to Rx FIFO 0 */
 	  sFilterConfig.IdType = FDCAN_STANDARD_ID;
 	  sFilterConfig.FilterIndex = 0;
-	  sFilterConfig.FilterType = FDCAN_FILTER_MASK;
+	  sFilterConfig.FilterType = FDCAN_FILTER_DUAL;
 	  sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
 	  //only receive two ID, Master general call and P2P call
-	  sFilterConfig.FilterID1 = (uint16_t) (MASTER_P2P_MASK | CAN_ID); // Master P2P call
-	  sFilterConfig.FilterID2 = (uint16_t) 0x0000; //Master general call
+	  sFilterConfig.FilterID1 = (uint16_t)(MASTER_P2P_MASK | CAN_ID); // Master P2P call
+	  sFilterConfig.FilterID2 = (uint16_t)MASTER_BROADCAST; //Master general call
 	  if (HAL_FDCAN_ConfigFilter(&canbus.CanHandle, &sFilterConfig) != HAL_OK)
 	  {
 	    Error_Handler();

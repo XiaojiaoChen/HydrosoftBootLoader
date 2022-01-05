@@ -36,7 +36,7 @@ class VCI_CAN_OBJ(Structure):
 
 
 class USB_CAN:
-    def __init__(self, CAN_ID=0x0400, baud=1000000):
+    def __init__(self, CAN_ID=0x07FF, baud=1000000):
 
         self.VCI_USBCAN2 = 4
         self.STATUS_OK = 1
@@ -89,12 +89,12 @@ class USB_CAN:
             print('Start CAN Channel {} fail'.format(chn))
         return ret
 
-    def setTxID(self,canID=0x0400):
+    def setCANID(self,canID=0x07FF):
         self.CAN_ID = canID
 
     def start_keyboard(self):
         self.keyboard_alive = 1
-        print('Ready for keyboard input:')
+        print("Keyboard Input Enabled")
         self.keyboardThread = threading.Thread(target=self.keyboard_thread)
         self.threads.append(self.keyboardThread)
         self.keyboardThread.start()
@@ -103,25 +103,18 @@ class USB_CAN:
         return self.kbdQueue.get()
 
     def keyboard_thread(self):
-
         while(self.keyboard_alive==1):
             try:
                 input_str = input()
                 if (len(input_str) > 0):
                     self.kbdQueue.put(input_str)
-                    #customize terminal input action here
-
             except:
                 print("quit keyboard thread")
                 break
 
-
-
-   
-
     def start_receiving(self, chn=0):
         self.receiving_alive=1
-        print("start receiving Can info:")
+        print("Receiving thread started")
         self.receivingThread = threading.Thread(target=self.receiving_thread,args=(chn,))
         self.threads.append(self.receivingThread)
         self.receivingThread.start()
@@ -130,14 +123,9 @@ class USB_CAN:
         if(self.channelStatus[chn] == 1):
             while(self.receiving_alive):
                 rxNB=0
-                #Show Rx
                 while rxNB <= 0 and self.receiving_alive:
                     rxNB = self.canDLL.VCI_Receive(self.VCI_USBCAN2, 0, chn, byref(self.rx_vci_can_obj), 2500, 0)
-                    #print("Wait Rx")
-                    # aa+=1
                 for i in range (rxNB):
-                    #customize receiving action here
-                    #print("CAN channel {} Receive ID:{}, Len:{}, Data: {} ".format(chn,self.rx_vci_can_obj[i].ID,self.rx_vci_can_obj[i].DataLen,list(self.rx_vci_can_obj[i].Data)))
                     dlen=self.rx_vci_can_obj[i].DataLen
                     #print("Rx dalaLen={}".format(dlen))
                     dlc=bytearray(self.rx_vci_can_obj[i].Data[:dlen])

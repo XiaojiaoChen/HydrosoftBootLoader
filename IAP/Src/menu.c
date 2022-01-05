@@ -123,6 +123,7 @@ HAL_StatusTypeDef SerialDownload(void) {
  * @retval None
  */
 void IAP_Menu() {
+	extern const uint16_t CAN_ID;
 	uint8_t defaultKeyValue = 'a';
 	uint8_t key = defaultKeyValue;
 	uint8_t holdon = 0;
@@ -131,10 +132,15 @@ void IAP_Menu() {
 	uint8_t tick[10]={0};
 	uint8_t canIDStr[5]={0};
 	Int2Str(canIDStr,(CAN_ID));
+	const uint16_t *canIDAddress=&CAN_ID;//0x08003c62
+	uint8_t canAddStr[33]={0};
+	Int2Str(canAddStr,(uint32_t)(canIDAddress));
 
 	FDCAN_PutString("\r\n=================== CAN_ID = ");
 	FDCAN_PutString((char *)canIDStr);
-	FDCAN_PutString(" =======================\r\n\n");
+	FDCAN_PutString(" at Address ");
+	FDCAN_PutString((char *)canAddStr);
+	FDCAN_PutString("   =======\r\n\n");
 	FDCAN_PutString("  Jump to application                  ----------------- 0\r\n\n");
 	FDCAN_PutString("  Download image to the internal Flash ----------------- 1\r\n\n");
 	FDCAN_PutString("  hold                                 ----------------- 2\r\n\n");

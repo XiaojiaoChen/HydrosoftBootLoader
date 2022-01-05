@@ -644,7 +644,7 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
 //      result = COM_ERROR;
 //    }
 //  }
-//
+
 //  /* Empty packet sent - some terminal emulators need this to close session */
 //  if ( result == COM_OK )
 //  {

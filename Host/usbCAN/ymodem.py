@@ -5,9 +5,6 @@ from enum import Enum
 import time
 import os
 
-canbus = USB_CAN() 
-
-
 USER_FLASH_SIZE = 0x0803F800 - 0x08004000
 
 COM_OK       = 0
@@ -19,21 +16,20 @@ COM_LIMIT    = 5
 
 
 PACKET_HEADER_SIZE=      3
-PACKET_DATA_INDEX  =     4
-PACKET_START_INDEX   =   1
-PACKET_NUMBER_INDEX  =   2
-PACKET_CNUMBER_INDEX =   3
+PACKET_DATA_INDEX  =     3
+PACKET_START_INDEX   =   0
+PACKET_NUMBER_INDEX  =   1
+PACKET_CNUMBER_INDEX =   2
 PACKET_TRAILER_SIZE  =   2
-PACKET_OVERHEAD_SIZE =   (PACKET_HEADER_SIZE + PACKET_TRAILER_SIZE - 1)
+PACKET_OVERHEAD_SIZE =   (PACKET_HEADER_SIZE + PACKET_TRAILER_SIZE)
 PACKET_SIZE      =      128
 PACKET_1K_SIZE    =     1024
 
-# #/-------- Packet in IAP memory ------------------------------------------\
-#  * | 0      |  1    |  2     |  3   |  4      | ... | n+4     | n+5  | n+6  | 
+# #/-------- Packet  Format in Ymodem------------------------------------------\
+#  * | 0      |  1    |  2     |  3      | ... | n+3     | n+4  | n+5  | 
 #  * |------------------------------------------------------------------------|
-#  * | unused | start | number | !num | data[0] | ... | data[n] | crc0 | crc1 |
+#  * | start | number | !num   | data[0] | ... | data[n] | crc0 | crc1 |
 #  * \------------------------------------------------------------------------/
-#  * the first byte is left unused for memory alignment reasons 
 
 
 FILE_NAME_LENGTH=        64
@@ -50,55 +46,6 @@ ABORT1          =        0x41 # 'A' == 0x41, abort by user */
 ABORT2          =        0x61 # 'a' == 0x61, abort by uNAK_TIMEOUT     =        _t)0x100000)
 DOWNLOAD_TIMEOUT=        5000 #One second retry delay */
 MAX_ERRORS      =        5
-
-PACKET_1K_SIZE + PACKET_DATA_INDEX + PACKET_TRAILER_SIZE
-
-aPacketData=bytearray(PACKET_1K_SIZE + PACKET_DATA_INDEX + PACKET_TRAILER_SIZE)
-
-#p_data is a bytearray
-#p_file_name is a string
-
-
-def PrepareIntialPacket(p_data, p_file_name, length):
-
-    p_data[PACKET_START_INDEX] = SOH
-    p_data[PACKET_NUMBER_INDEX] = 0x00
-    p_data[PACKET_CNUMBER_INDEX] = 0xff
-
-    #Filename writte
-    fileNameLen=len(p_file_name)
-    p_data[PACKET_DATA_INDEX:PACKET_DATA_INDEX+fileNameLen] = p_file_name.encode('utf-8')
-    p_data[PACKET_DATA_INDEX+fileNameLen] = 0x00
-
-    #file size written
-    lenInd=PACKET_DATA_INDEX+fileNameLen + 1
-    astring = str(length).encode('utf-8')
-    p_data[lenInd:lenInd+len(astring)]=astring
-
-    padInd=lenInd+len(astring)
-    for i in range(padInd,PACKET_SIZE + PACKET_DATA_INDEX):
-      p_data[i]=0x00
-
-
-def PreparePacket(p_source, p_packet,pkt_nr,size_blk):
-  #Make first three packet */
-  packet_size = PACKET_1K_SIZE if  size_blk >= PACKET_1K_SIZE else PACKET_SIZE
-  size = size_blk if size_blk < packet_size  else packet_size
-  if (packet_size == PACKET_1K_SIZE):
-    p_packet[PACKET_START_INDEX] = STX
-  else:
-    p_packet[PACKET_START_INDEX] = SOH
-  
-  p_packet[PACKET_NUMBER_INDEX] = pkt_nr
-  p_packet[PACKET_CNUMBER_INDEX] = 255-pkt_nr  #(~pkt_nr)
-
-  #Filename packet has valid data */
-  p_packet[PACKET_DATA_INDEX : PACKET_DATA_INDEX + size] = p_source[:size]
- 
-  if ( size  <= packet_size):
-    for i in range(size + PACKET_DATA_INDEX ,packet_size + PACKET_DATA_INDEX):
-        p_packet[i] = 0x1A #EOF (0x1A) or 0x00 */
-
 
 def UpdateCRC16(crc_in, byte):
   crc = crc_in
@@ -129,236 +76,228 @@ def CalcChecksum(p_data, size):
     sum += p_data[i]
   return (sum & 0xff)
 
+#p_data is a bytearray
+#p_file_name is a string
 
+def PrepareIntialPacket(p_data, p_file_name, length):
+  p_data[PACKET_START_INDEX] = SOH
+  p_data[PACKET_NUMBER_INDEX] = 0x00
+  p_data[PACKET_CNUMBER_INDEX] = 0xff
 
+  #Filename writte
+  fileNameLen=len(p_file_name)
+  p_data[PACKET_DATA_INDEX:PACKET_DATA_INDEX+fileNameLen] = p_file_name.encode('utf-8')
+  p_data[PACKET_DATA_INDEX+fileNameLen] = 0x00
 
-def Ymodem_Transmit(filePath):
+  #file size written
+  lenInd=PACKET_DATA_INDEX+fileNameLen + 1
+  astring = str(length).encode('utf-8')
+  p_data[lenInd:lenInd+len(astring)]=astring
 
+  padInd=lenInd+len(astring)
+  for i in range(padInd,PACKET_SIZE + PACKET_DATA_INDEX):
+    p_data[i]=0x00
+
+  #calculate CRC
+  temp_crc = Cal_CRC16(p_data[PACKET_DATA_INDEX:], PACKET_SIZE)
+  p_data[PACKET_DATA_INDEX+PACKET_SIZE]= (temp_crc >> 8)
+  p_data[PACKET_DATA_INDEX+PACKET_SIZE+1]= (temp_crc & 0xFF)
+
+def PreparePacket(p_source, p_packet,pkt_nr,size_blk):
+
+  packet_size = PACKET_1K_SIZE if  size_blk >= PACKET_1K_SIZE else PACKET_SIZE
+  size = size_blk if size_blk < packet_size  else packet_size
   
-  p_file_name=os.path.basename(filePath)
-  p_buf = open(filePath, 'rb').read()
-  file_size=len(p_buf)
+  #packet size indicator
+  if (packet_size == PACKET_1K_SIZE):
+    p_packet[PACKET_START_INDEX] = STX
+  else:
+    p_packet[PACKET_START_INDEX] = SOH
+  
+  #packet number
+  p_packet[PACKET_NUMBER_INDEX] = pkt_nr
+  p_packet[PACKET_CNUMBER_INDEX] = 255-pkt_nr  #(~pkt_nr)
 
-  errors = 0
-  ack_recpt = 0
-  size = 0
-  pkt_size=0
-  p_buf_int=0
-  result = COM_OK
-  blk_number = 1
-  a_rx_ctrl=bytearray(2)
-  i=0  
-  temp_crc=0
+  #packet data, fill empty space
+  p_packet[PACKET_DATA_INDEX : PACKET_DATA_INDEX + size] = p_source[:size]
+  if ( size  <= packet_size):
+    for i in range(size + PACKET_DATA_INDEX ,packet_size + PACKET_DATA_INDEX):
+        p_packet[i] = 0x1A #EOF (0x1A) or 0x00 */
+  
+  #calculate CRC
+  temp_crc = Cal_CRC16(p_packet[PACKET_DATA_INDEX:], packet_size)
+  p_packet[PACKET_DATA_INDEX+packet_size]= (temp_crc >> 8)
+  p_packet[PACKET_DATA_INDEX+packet_size+1]= (temp_crc & 0xFF)
+
+class YMODEM_FLASHER:
+  def __init__(self):
+    self.CAN_ID_BROADCAST  = 0x07FF #Host CAN ID, for broadcasting
+    self.CAN_ID_P2P_MASK = 0x0400
+    self.canbus=USB_CAN(CAN_ID=self.CAN_ID_BROADCAST)
+    self.canbus.open(0)
+    self.canbus.start_keyboard()
+    self.canbus.start_receiving()
+    self.packetBuffer=bytearray(PACKET_1K_SIZE + PACKET_OVERHEAD_SIZE)
+    self.a_rx_ctrl=bytearray(1)
+
+  def jumpToApp(self):
+    #set Tx ID to host ID,return char '2' for holding on all CAN Node
+    self.canbus.setCANID(self.CAN_ID_BROADCAST)
+    holdChar = b'0'
+    self.canbus.transmit(holdChar,1)
+
+  def getInput(self):
+      return self.canbus.getInput()
+
+  def holdOn(self):
+    #set Tx ID to host ID,return char '2' for holding on all CAN Node
+    self.canbus.setCANID(self.CAN_ID_BROADCAST)
+    holdChar = b'2'
+    self.canbus.transmit(holdChar,1)
 
 
 
-  canbus.clearRxBuffer()
-  tx_ctrl=bytearray(2)
-  bchar='1'
-  tx_ctrl[:1]=bchar.encode('utf-8')
-  canbus.transmit(tx_ctrl,1)
-  print("Sending Flahs Request...")
+  def waitFor(self,waitingByte):
+    status = COM_ERROR
+      #Wait for Ack or 'C' */
+    if (self.canbus.receive(self.a_rx_ctrl, 1) == COM_OK):
+      if (self.a_rx_ctrl[0] == waitingByte):
+        status = COM_OK
+      elif (self.a_rx_ctrl[0] == CA):
+        print("Get CA")
+        if ((self.canbus.receive(self.a_rx_ctrl, 1) == COM_OK) and (self.a_rx_ctrl[0] == CA)):
+          time.sleep( 2 )
+          status = COM_ABORT
+      elif (self.a_rx_ctrl[0] == CRC16):
+        print("Get C")
+      else:
+        print("invalid code {}".format(self.a_rx_ctrl[0]))
+        status = COM_ERROR
+    else:
+      status = COM_TIMEOUT
 
-  while(a_rx_ctrl[0]!=CRC16):
-    canbus.receive(a_rx_ctrl, 1)
-    time.sleep(0.01)
+    return status
 
 
-  #Prepare first block - header */
-  PrepareIntialPacket(aPacketData, p_file_name, file_size)
+  def flash(self,targetCANID,filePath):
+        
+    p_file_name=os.path.basename(filePath)
+    p_file_content = open(filePath, 'rb').read()
+    file_size=len(p_file_content)
 
-  while((ack_recpt==0 ) and ( result == COM_OK )):
-    #Send Packet */
+    #set Tx ID to P2P ID,
+    id=self.CAN_ID_P2P_MASK | targetCANID
+    self.canbus.setCANID(self.CAN_ID_P2P_MASK | targetCANID)
+    print("set CAN Tx ID to 0x{:x}".format(id))
+
+    #send request
+    print("Sending Flash Request")
+    self.canbus.clearRxBuffer()
+    time.sleep(0.1)
+    requestChar = b'1'
+    self.canbus.transmit(requestChar,1)
+    result = COM_ERROR
+    while(result!=COM_OK):
+      result = self.waitFor(CRC16)
+
+    #Send Init Packet
     print("Sending Init Packet")
-    canbus.transmit(aPacketData[PACKET_START_INDEX:], PACKET_SIZE + PACKET_HEADER_SIZE)
+    PrepareIntialPacket(self.packetBuffer, p_file_name, file_size)
+    self.canbus.clearRxBuffer()
+    result = COM_ERROR
+    while(result != COM_OK ):
+      if(self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE)==COM_OK):
+        print("Erasing flash ...")
+        result = self.waitFor(ACK)
+        if(result==COM_OK):
+          self.waitFor(CRC16)
 
-    #Send CRC or Check Sum based on CRC16_F */
-    temp_crc = Cal_CRC16(aPacketData[PACKET_DATA_INDEX:], PACKET_SIZE)
-    canbus.transmit([(temp_crc >> 8)],1)
-    canbus.transmit([temp_crc & 0xFF],1)
-
-    #Wait for Ack and 'C' */
-    if (canbus.receive(a_rx_ctrl, 1) == COM_OK):
-      if (a_rx_ctrl[0] == ACK):
-        # print("Get ACK")
-        canbus.receive(a_rx_ctrl, 1)
-        print("Get ACK and {}".format(a_rx_ctrl[0]))
-        ack_recpt = 1
-      elif (a_rx_ctrl[0] == CA):
-        print("Get CA")
-        if ((canbus.receive(a_rx_ctrl, 1) == COM_OK) and (a_rx_ctrl[0] == CA)):
-          time.sleep( 2 )
-          result = COM_ABORT
-      else:
-        print("Invalid ret code, get {} and {}".format(a_rx_ctrl[0],a_rx_ctrl[1]))
-    else:
-      print("Error, Rx Timeout")
-      errors+=1
-
-    if (errors >= MAX_ERRORS):
-      print("Reach Max Error")
-      result = COM_ERROR
-    
-
-  p_buf_int = 0
-  size = file_size
-
-  packetNum=0
-  packetTotal = size//1024+1
-
-  #Here 1024 bytes length is used to send the packets */
-  while ((size) and (result == COM_OK )):
-    
-    #Prepare next packet */
-    PreparePacket(p_buf[p_buf_int:], aPacketData, blk_number, size)
-    ack_recpt = 0
-    a_rx_ctrl[0] = 0
-    errors = 0
-    packetNum +=1
-    curT1=time.time_ns()//1000000
-    #Resend packet if 'C' is received else end of communication */
-    while (( ack_recpt==0 ) and ( result == COM_OK )):
-    
-      #Send next packet */
-      if (size >= PACKET_1K_SIZE):
+    #Send Data Packets
+    pkt_size=0
+    blk_number = 1
+    p_file_ind = 0
+    size = file_size
+    packetNum=0
+    packetTotal = size//1024+1
+    result=COM_OK
+    while ((size) and (result == COM_OK )):
       
-        pkt_size = PACKET_1K_SIZE
-      
-      else:
-      
-        pkt_size = PACKET_SIZE
-      
-      #before sending every packet, clear the rx buffer in case of multiple 'c'
-      canbus.clearRxBuffer()
-      dtPacket1 = time.time_ns()//1000000 - curT1
-      curT1=time.time_ns()//1000000
+      #Prepare next data packet */
+      PreparePacket(p_file_content[p_file_ind:], self.packetBuffer, blk_number, size)
+      packetNum +=1
+      curT0=time.time_ns()//1000000
 
-      # print("Sending data packet ({}/{})...".format(packetNum,packetTotal))
-      canbus.transmit(aPacketData[PACKET_START_INDEX:], pkt_size + PACKET_HEADER_SIZE)
-      #Send CRC or Check Sum based on CRC16_F */
-      temp_crc = Cal_CRC16(aPacketData[PACKET_DATA_INDEX:], pkt_size)
-      canbus.transmit([temp_crc >> 8],1)
-      canbus.transmit([temp_crc & 0xFF],1)
-      dtPacket2 = time.time_ns()//1000000 - curT1
-      # print("Sent after {} ms ".format(dtPacket2),end="")
+      #Resend packet if 'ACK' is not received*/
+      result=COM_ERROR
+      while (result != COM_OK ):
+        curT1=time.time_ns()//1000000
 
+        #Determine packet size */
+        if (size >= PACKET_1K_SIZE):
+          pkt_size = PACKET_1K_SIZE
+        else:
+          pkt_size = PACKET_SIZE
+        
+        #before sending every packet, clear the rx buffer
+        self.canbus.clearRxBuffer()
 
-      #Wait for Ack */
-      rret = canbus.receive(a_rx_ctrl, 1)
-      if ( rret== COM_OK):
-          
-          if (a_rx_ctrl[0] == ACK):
-            dtPacket3 = time.time_ns()//1000000 - curT1
-            print("Tx={} ms; ACK={} ms; Data Packet Sent({}/{}) ".format(dtPacket2,dtPacket3-dtPacket2,packetNum,packetTotal))
-            ack_recpt = 1
-            if (size > pkt_size):
-              p_buf_int += pkt_size
-              size -= pkt_size
-              if (blk_number == (USER_FLASH_SIZE / PACKET_1K_SIZE)):
-                result = COM_LIMIT #boundary error */
-              else:
-                blk_number+=1
+        #Send data packet
+        self.canbus.transmit(self.packetBuffer, pkt_size + PACKET_OVERHEAD_SIZE)
+        curT2 = time.time_ns()//1000000
+
+        #Wait for ACK
+        result = self.waitFor(ACK)
+
+        #if get ACK, update next packet info
+        if(result==COM_OK):
+          curT3 = time.time_ns()//1000000
+          print("Tx: {} ms; ACK {} ms; Sent Data Packet ({}/{})".format(curT2-curT1,curT3-curT2,packetNum,packetTotal))
+          if (size > pkt_size):
+            p_file_ind += pkt_size
+            size -= pkt_size
+            if (blk_number == (USER_FLASH_SIZE / PACKET_1K_SIZE)):
+              result = COM_LIMIT #boundary error */
             else:
-              p_buf_int += pkt_size
-              size = 0
-          elif(a_rx_ctrl[0] == CA):
-              print("Get CA")
-              if ((canbus.receive(a_rx_ctrl, 1) == COM_OK) and (a_rx_ctrl[0] == CA)):
-                time.sleep( 2 )
-                result = COM_ABORT
-          elif(a_rx_ctrl[0] == CRC16):
-            print("Get Resend request")
+              blk_number+=1
           else:
-            print("Get invaid ret code {}".format(a_rx_ctrl[0]))
-      elif(rret==COM_TIMEOUT):
-        print("Timeout in rx char")
-      else:
-        print("Error in trans dat, get {}".format(a_rx_ctrl[0]))
-        errors+=1
-      #Resend packet if NAK  for a count of 10 else end of communication */
-      if (errors >= MAX_ERRORS):
-        print("Reach Max Error")
-        result = COM_ERROR
-    
-  #Sending End Of Transmission char */
-  ack_recpt = 0
-  a_rx_ctrl[0] = 0x00
-  errors = 0
-  while (( ack_recpt==0 ) and ( result == COM_OK )):
-    print("Sending EOT")
-    canbus.transmit([EOT],1)
-
-    #Wait for Ack */
-    if (canbus.receive(a_rx_ctrl, 1) == COM_OK):
+            p_file_ind += pkt_size
+            size = 0
       
-      if (a_rx_ctrl[0] == ACK):
-        print("Get ACK")
-        ack_recpt = 1
-      elif (a_rx_ctrl[0] == CA):
-        print("Get CA")
-        if ((canbus.receive(a_rx_ctrl, 1) == COM_OK) and (a_rx_ctrl[0] == CA)):
-          time.sleep( 2 )
-          result = COM_ABORT
-    else:
-      print("Error EOT")
-      errors+=1
-    if (errors >=  MAX_ERRORS):
-      print("Reach Max Error EOT")
-      result = COM_ERROR
+    #Sending End Of Transmission char */
+    result=COM_ERROR
+    while (result != COM_OK ):
+      print("Sending EOT")
+      self.canbus.transmit([EOT],1)
+      result = self.waitFor(ACK)
 
-  #Empty packet sent - some terminal emulators need this to close session */
-  if ( result == COM_OK ):
-  
-    #Preparing an empty packet */
-    aPacketData[PACKET_START_INDEX] = SOH
-    aPacketData[PACKET_NUMBER_INDEX] = 0
-    aPacketData[PACKET_CNUMBER_INDEX] = 0xFF
+    #Empty packet to close session */
+    PrepareIntialPacket(self.packetBuffer,'',0)
+    result=COM_ERROR
+    while (result != COM_OK ):
+      print("Sending Closing packet")
+      self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE)
+      result = self.waitFor(ACK)
 
-    for i in range(PACKET_DATA_INDEX , PACKET_SIZE + PACKET_DATA_INDEX):
-      aPacketData[i] = 0x00
+    return result #file transmitted successfully */
 
-    #Send Packet */
-    canbus.transmit(aPacketData[PACKET_START_INDEX:], PACKET_SIZE + PACKET_HEADER_SIZE)
-
-    #Send CRC or Check Sum based on CRC16_F */  
-    temp_crc = Cal_CRC16(aPacketData[PACKET_DATA_INDEX:], PACKET_SIZE)
-    canbus.transmit([temp_crc >> 8],1)
-    canbus.transmit([temp_crc & 0xFF],1)
-
-
-    #Wait for Ack and 'C' */
-    if (canbus.receive(a_rx_ctrl, 1) == COM_OK):
-         if (a_rx_ctrl[0] == CA):
-             time.sleep( 2 )
-             result = COM_ABORT
-
-  return result #file transmitted successfully */
-
+  def close(self):
+    self.canbus.close()        
 
 
 def run():
-  canbus.open(0)
-  canbus.open(1)
-  canbus.start_keyboard()
-  canbus.start_receiving(0)
-
+      
   binPath="hydrosoft_IMU_V3.bin"
-
+  flasher = YMODEM_FLASHER()
   try:
     while(True):
-      if(canbus.getInput()=='1'):
-        canbus.clearRxBuffer()
-        time.sleep(0.1)
-        Ymodem_Transmit(binPath)
-      elif(canbus.getInput()=='0'):
-        canbus.clearRxBuffer()
-        time.sleep(0.1)
-        tx_ctrl=bytearray(2)
-        bchar='0'
-        tx_ctrl[:1]=bchar.encode('utf-8')
-        canbus.transmit(tx_ctrl,1)
-        print("Sending Start Request...")
+      c=flasher.getInput()
+      if(c=='0'):
+        flasher.jumpToApp()
+      elif(c=='1'):
+        flasher.flash(0x00,binPath)
+      elif(c=='2'):
+        flasher.holdOn()
   except KeyboardInterrupt:
-    canbus.close()
+    flasher.close()
 
 run()
