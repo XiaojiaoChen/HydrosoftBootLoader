@@ -84,10 +84,6 @@ HAL_StatusTypeDef queue_in_bulk(MYQUEUE *q,uint8_t *pSrc,int len){
 		q->count+=len;
 		q->rear=(q->rear + len) % MY_QUEUE_SIZE;
 
-		if(q->buf[1]==0){
-			int bb=1;
-		}
-
 		return HAL_OK;
 	}
 	else

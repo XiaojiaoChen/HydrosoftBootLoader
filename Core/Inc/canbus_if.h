@@ -24,6 +24,7 @@
  }CANBUS_HANDLE;
  extern CANBUS_HANDLE canbus;
 
+ void FDCAN_Config();
  HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int16_t num,uint32_t timeout);
  HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout);
  void FDCAN_ClearRxBuffer();

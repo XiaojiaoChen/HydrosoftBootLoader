@@ -14,6 +14,9 @@ COM_TIMEOUT  = 3
 COM_DATA     = 4
 COM_LIMIT    = 5
 
+MASTER_BROADCAST=0x07FF
+MASTER_P2P_MASK =0x0400
+
 
 PACKET_HEADER_SIZE=      3
 PACKET_DATA_INDEX  =     3
@@ -46,6 +49,7 @@ ABORT1          =        0x41 # 'A' == 0x41, abort by user */
 ABORT2          =        0x61 # 'a' == 0x61, abort by uNAK_TIMEOUT     =        _t)0x100000)
 DOWNLOAD_TIMEOUT=        5000 #One second retry delay */
 MAX_ERRORS      =        5
+
 
 def UpdateCRC16(crc_in, byte):
   crc = crc_in
@@ -131,29 +135,38 @@ def PreparePacket(p_source, p_packet,pkt_nr,size_blk):
 
 class YMODEM_FLASHER:
   def __init__(self):
-    self.CAN_ID_BROADCAST  = 0x07FF #Host CAN ID, for broadcasting
-    self.CAN_ID_P2P_MASK = 0x0400
+    self.CAN_ID_BROADCAST  = MASTER_BROADCAST
+    self.CAN_ID_P2P_MASK = MASTER_P2P_MASK
+
     self.canbus=USB_CAN(CAN_ID=self.CAN_ID_BROADCAST)
-    self.canbus.open(0)
-    self.canbus.start_keyboard()
-    self.canbus.start_receiving()
+
     self.packetBuffer=bytearray(PACKET_1K_SIZE + PACKET_OVERHEAD_SIZE)
     self.a_rx_ctrl=bytearray(1)
+  
+  def open(self,chn=0,filterType=0,rxID=0):
+    self.chn=chn;
+    self.canbus.open(chn,filterType,rxID)
+    self.canbus.start_keyboard()
+    self.canbus.start_receiving(self.chn)
 
-  def jumpToApp(self):
+  def GoToApp(self):
     #set Tx ID to host ID,return char '2' for holding on all CAN Node
+    id=self.canbus.CAN_ID
     self.canbus.setCANID(self.CAN_ID_BROADCAST)
     holdChar = b'0'
-    self.canbus.transmit(holdChar,1)
+    self.canbus.transmit(holdChar,1,self.chn)
+    self.canbus.setCANID(id)
 
   def getInput(self):
       return self.canbus.getInput()
 
-  def holdOn(self):
+  def HoldAll(self):
     #set Tx ID to host ID,return char '2' for holding on all CAN Node
+    id=self.canbus.CAN_ID
     self.canbus.setCANID(self.CAN_ID_BROADCAST)
     holdChar = b'2'
-    self.canbus.transmit(holdChar,1)
+    self.canbus.transmit(holdChar,1,self.chn)
+    self.canbus.setCANID(id)
 
 
 
@@ -162,6 +175,8 @@ class YMODEM_FLASHER:
       #Wait for Ack or 'C' */
     if (self.canbus.receive(self.a_rx_ctrl, 1) == COM_OK):
       if (self.a_rx_ctrl[0] == waitingByte):
+        if(waitingByte==ACK):
+          print("get ACK")
         status = COM_OK
       elif (self.a_rx_ctrl[0] == CA):
         print("Get CA")
@@ -179,7 +194,7 @@ class YMODEM_FLASHER:
     return status
 
 
-  def flash(self,targetCANID,filePath):
+  def Flash(self,targetCANID,filePath):
         
     p_file_name=os.path.basename(filePath)
     p_file_content = open(filePath, 'rb').read()
@@ -190,15 +205,22 @@ class YMODEM_FLASHER:
     self.canbus.setCANID(self.CAN_ID_P2P_MASK | targetCANID)
     print("set CAN Tx ID to 0x{:x}".format(id))
 
-    #send request
+    #hold first
+    requestChar = b'2'
+    self.canbus.transmit(requestChar,1,self.chn)
+    time.sleep(0.5)
+    self.canbus.clearRxBuffer() #clear response rx buffer
+
+    #send flash request
     print("Sending Flash Request")
     self.canbus.clearRxBuffer()
-    time.sleep(0.1)
     requestChar = b'1'
-    self.canbus.transmit(requestChar,1)
+    self.canbus.transmit(requestChar,1,self.chn)
     result = COM_ERROR
     while(result!=COM_OK):
       result = self.waitFor(CRC16)
+      if(result==COM_ABORT):
+        return COM_ABORT
 
     #Send Init Packet
     print("Sending Init Packet")
@@ -206,11 +228,14 @@ class YMODEM_FLASHER:
     self.canbus.clearRxBuffer()
     result = COM_ERROR
     while(result != COM_OK ):
-      if(self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE)==COM_OK):
+      if(self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE,self.chn)==COM_OK):
         print("Erasing flash ...")
         result = self.waitFor(ACK)
         if(result==COM_OK):
           self.waitFor(CRC16)
+        elif(result==COM_ABORT):
+          return COM_ABORT
+
 
     #Send Data Packets
     pkt_size=0
@@ -240,9 +265,9 @@ class YMODEM_FLASHER:
         
         #before sending every packet, clear the rx buffer
         self.canbus.clearRxBuffer()
-
+        print("Sending Data Packet ({}/{}".format(packetNum,packetTotal))
         #Send data packet
-        self.canbus.transmit(self.packetBuffer, pkt_size + PACKET_OVERHEAD_SIZE)
+        self.canbus.transmit(self.packetBuffer, pkt_size + PACKET_OVERHEAD_SIZE,self.chn)
         curT2 = time.time_ns()//1000000
 
         #Wait for ACK
@@ -251,7 +276,7 @@ class YMODEM_FLASHER:
         #if get ACK, update next packet info
         if(result==COM_OK):
           curT3 = time.time_ns()//1000000
-          print("Tx: {} ms; ACK {} ms; Sent Data Packet ({}/{})".format(curT2-curT1,curT3-curT2,packetNum,packetTotal))
+          print("Tx: {} ms; Sent Data Packet ({}/{})".format(curT2-curT1,packetNum,packetTotal))
           if (size > pkt_size):
             p_file_ind += pkt_size
             size -= pkt_size
@@ -262,12 +287,14 @@ class YMODEM_FLASHER:
           else:
             p_file_ind += pkt_size
             size = 0
+        elif(result==COM_ABORT):
+          return COM_ABORT
       
     #Sending End Of Transmission char */
     result=COM_ERROR
     while (result != COM_OK ):
       print("Sending EOT")
-      self.canbus.transmit([EOT],1)
+      self.canbus.transmit([EOT],1,self.chn)
       result = self.waitFor(ACK)
 
     #Empty packet to close session */
@@ -275,7 +302,7 @@ class YMODEM_FLASHER:
     result=COM_ERROR
     while (result != COM_OK ):
       print("Sending Closing packet")
-      self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE)
+      self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE,self.chn)
       result = self.waitFor(ACK)
 
     return result #file transmitted successfully */
@@ -284,20 +311,46 @@ class YMODEM_FLASHER:
     self.canbus.close()        
 
 
-def run():
-      
-  binPath="hydrosoft_IMU_V3.bin"
-  flasher = YMODEM_FLASHER()
-  try:
-    while(True):
-      c=flasher.getInput()
-      if(c=='0'):
-        flasher.jumpToApp()
-      elif(c=='1'):
-        flasher.flash(0x00,binPath)
-      elif(c=='2'):
-        flasher.holdOn()
-  except KeyboardInterrupt:
-    flasher.close()
 
-run()
+binPath="hydrosoft_IMU_V3.bin"
+
+node_canID =0
+
+flasher = YMODEM_FLASHER()
+
+chn=0
+
+
+
+fliterType = flasher.canbus.RX_FILTER_TYPE_ONE
+
+
+flasher.open(chn,fliterType,node_canID)
+
+
+try:
+  while(True):
+    inputStr=flasher.getInput()
+
+    if(inputStr[0]=='g'):
+      flasher.GoToApp()
+
+    elif(inputStr[0]=='f'):
+      if(len(inputStr)>1):
+        targetID=int(inputStr[1:])
+      else:
+        targetID=node_canID
+      flasher.open(chn,fliterType,targetID)
+      flasher.HoldAll()
+      time.sleep(0.1)
+      flasher.canbus.clearRxBuffer()
+      flasher.Flash(targetID,binPath)
+
+    elif(inputStr[0]=='h'):
+      flasher.HoldAll()
+
+    elif(inputStr[0]=='c'):
+      flasher.canbus.clearRxBuffer()
+
+except KeyboardInterrupt:
+  flasher.close()

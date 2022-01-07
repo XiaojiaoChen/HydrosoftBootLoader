@@ -7,17 +7,21 @@
 
 #include "canbus_if.h"
 
-const uint16_t CAN_ID=0x0000;
+/* Modify this CAN_ID_64 for different board. This constant will be flashed and stored as a double word at address 0x08003800 */
+
+const uint64_t CAN_ID_64=0x0000;   //itself is stored at 0x08002068
+
+
 
 
 #define MASTER_BROADCAST  0x07FF   //Master BroadCast ID
 #define MASTER_P2P_MASK   0x0400   //Master p2p Mask is 0x0400
-
+uint16_t CAN_ID=CAN_ID_64;
 
 CANBUS_HANDLE canbus;
 extern FDCAN_HandleTypeDef hfdcan1;
 
-void canConfig() {
+void FDCAN_Config() {
 
 	 canbus.CanHandle = hfdcan1;
 	 FDCAN_FilterTypeDef sFilterConfig;

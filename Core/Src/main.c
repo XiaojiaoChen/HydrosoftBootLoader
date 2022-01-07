@@ -22,7 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "menu.h"
-
+#include "canbus_if.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,8 +52,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_FDCAN1_Init(void);
 /* USER CODE BEGIN PFP */
-void canConfig();
-void canSend();
+void flashBoardID(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -91,8 +90,8 @@ int main(void)
   MX_GPIO_Init();
   MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
-
-   canConfig();
+  flashBoardID();
+  FDCAN_Config();
 
    IAP_Menu(); //10 000 ms before jump
 
@@ -215,6 +214,16 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/**
+ * Flash board infos into the previous page on the flash starting at 0x08003800
+ */
+void flashBoardID(void){
+	extern const uint64_t CAN_ID_64;
+	FLASH_If_Erase(FLASH_USER_START_ADDR-FLASH_PAGE_SIZE,FLASH_USER_START_ADDR-1);
+	HAL_FLASH_Unlock();
+	HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, FLASH_USER_START_ADDR-FLASH_PAGE_SIZE, CAN_ID_64);
+	HAL_FLASH_Lock();
+}
 void deInitAll(void){
 
 	  HAL_FDCAN_DeInit(&hfdcan1);

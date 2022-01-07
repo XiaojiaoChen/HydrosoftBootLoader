@@ -59,7 +59,7 @@ static uint32_t GetBank(uint32_t Address);
   * @retval FLASHIF_OK : user flash area successfully erased
   *         FLASHIF_ERASEKO : error occurred
   */
-uint32_t FLASH_If_Erase(uint32_t startAdd)
+uint32_t FLASH_If_Erase(uint32_t startAdd,uint32_t endAdd)
 {
 	HAL_StatusTypeDef status;
 	uint32_t FirstPage = 0, NbOfPages = 0, BankNumber = 0;
@@ -79,7 +79,7 @@ uint32_t FLASH_If_Erase(uint32_t startAdd)
     FirstPage = GetPage(startAdd);
 
     /* Get the number of pages to erase from 1st page */
-    NbOfPages = GetPage(FLASH_USER_END_ADDR) - FirstPage + 1;
+    NbOfPages = GetPage(endAdd) - FirstPage + 1;
 
     /* Get the bank */
     BankNumber = GetBank(FLASH_USER_START_ADDR);
@@ -129,34 +129,60 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
   /* Unlock the Flash to enable the flash control register access *************/
   HAL_FLASH_Unlock();
 
-  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
-  {
-    /* Device voltage range supposed to be [2.7V to 3.6V], the operation will
-       be done by word */ 
-	  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, destination, *(uint64_t*)(p_source64 + i )) == HAL_OK)
-    {
-     /* Check the written value */
-		uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
-		uint32_t *p_sourceCur32 = (uint32_t *)p_sourceCur64;
-		uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
-		uint32_t *p_desCur32 = (uint32_t *)p_desCur64;
-      if ((*(uint32_t*)p_desCur32 != *(uint32_t*)p_sourceCur32) ||
-    	  (*(uint32_t*)(p_desCur32+1) != *(uint32_t*)(p_sourceCur32+1)) )
-      {
-        /* Flash content doesn't match SRAM content */
-        return(FLASHIF_WRITINGCTRL_ERROR);
-      }
-      /* Increment FLASH destination address */
-//      uint8_t buf[100];
-//      sprintf(buf,"Write Flash at %x \n",destination);
-//      FDCAN_PutString(buf);
-      destination += 8;
-    }
-    else
-    {
-      /* Error occurred while writing data in Flash memory */
-      return (FLASHIF_WRITING_ERROR);
-    }
+  /*address is beginning at the row begninning, using fast program*/
+  if( destination & 0x000000FF ==0){
+	  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
+	 	  {
+	 		/* Device voltage range supposed to be [2.7V to 3.6V], the operation will
+	 		   be done by word */
+	 		  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_FAST, destination, *(uint64_t*)(p_source64 + i*256)) == HAL_OK)
+	 		{
+	 		 /* Check the written value */
+	 			uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
+	 			uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
+	 			for(int j=0;j<32;j++)
+				  if ((*p_sourceCur64 != *p_desCur64))
+				  {
+					/* Flash content doesn't match SRAM content */
+					return(FLASHIF_WRITINGCTRL_ERROR);
+				  }
+	 		  /* Increment FLASH destination address */
+	 		  destination += 256;
+	 		}
+	 		else
+	 		{
+	 		  /* Error occurred while writing data in Flash memory */
+	 		  return (FLASHIF_WRITING_ERROR);
+	 		}
+	 	  }
+  }
+  else{
+	  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
+	  {
+		/* Device voltage range supposed to be [2.7V to 3.6V], the operation will
+		   be done by word */
+		  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, destination, *(uint64_t*)(p_source64 + i )) == HAL_OK)
+		{
+		 /* Check the written value */
+			uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
+			uint32_t *p_sourceCur32 = (uint32_t *)p_sourceCur64;
+			uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
+			uint32_t *p_desCur32 = (uint32_t *)p_desCur64;
+		  if ((*(uint32_t*)p_desCur32 != *(uint32_t*)p_sourceCur32) ||
+			  (*(uint32_t*)(p_desCur32+1) != *(uint32_t*)(p_sourceCur32+1)) )
+		  {
+			/* Flash content doesn't match SRAM content */
+			return(FLASHIF_WRITINGCTRL_ERROR);
+		  }
+		  /* Increment FLASH destination address */
+		  destination += 8;
+		}
+		else
+		{
+		  /* Error occurred while writing data in Flash memory */
+		  return (FLASHIF_WRITING_ERROR);
+		}
+	  }
   }
 
   /* Lock the Flash to disable the flash control register access (recommended

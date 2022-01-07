@@ -9,6 +9,14 @@ COM_ERROR    = 1
 COM_ABORT    = 2
 COM_TIMEOUT  = 3
 
+
+MASTER_BROADCAST=0x07FF
+MASTER_P2P_MASK =0x0400
+
+RX_FILTER_MASK_ALL=0xFFFFFFFF
+RX_FILTER_MASK_ONE=0x00000000
+
+
 class VCI_INIT_CONFIG(Structure):
     _fields_ = [("AccCode", c_uint),
                 ("AccMask", c_uint),
@@ -36,7 +44,9 @@ class VCI_CAN_OBJ(Structure):
 
 
 class USB_CAN:
-    def __init__(self, CAN_ID=0x07FF, baud=1000000):
+    def __init__(self, CAN_ID=MASTER_BROADCAST, baud=1000000):
+
+
 
         self.VCI_USBCAN2 = 4
         self.STATUS_OK = 1
@@ -45,6 +55,8 @@ class USB_CAN:
         self.CAN_ID = CAN_ID
         self.channelStatus = [0, 0]
 
+        self.RX_FILTER_TYPE_ALL = 0
+        self.RX_FILTER_TYPE_ONE = 1
 
         self.receiving_alive=0
         self.keyboard_alive=0
@@ -52,7 +64,7 @@ class USB_CAN:
         self.kbdQueue = queue.Queue()
 
         self.rxQueue = queue.Queue()
-        self.rxTimeout=20
+        self.rxTimeout=200
 
         self.latestRxData=bytearray()
         self.latestRxDataLen=0
@@ -73,14 +85,19 @@ class USB_CAN:
 
 
 
-    def open(self, chn=0):
+    def open(self, chn=0,filterType=0,rxID=0):
+        filterAcc=rxID<<21
+        filterMask=RX_FILTER_MASK_ALL
+        if(filterType==self.RX_FILTER_TYPE_ONE):
+            filterMask=RX_FILTER_MASK_ONE
         #Init and Start CAN channel
         self.vci_initconfig = VCI_INIT_CONFIG(
-            0x80000008, 0xFFFFFFFF, 0, 0, 0x00, 0x14, 0)  # 1M baudrate, 87.5%,  normal mode, all ID acceptable
+            filterAcc, filterMask, 0, 0, 0x00, 0x14, 0)  # 1M baudrate, 87.5%,  normal mode, all ID acceptable
         ret = self.canDLL.VCI_InitCAN(
             self.VCI_USBCAN2, 0, chn, byref(self.vci_initconfig))
         if ret != self.STATUS_OK:
             print('Init CAN Channel {} fail'.format(chn))
+
         ret = self.canDLL.VCI_StartCAN(self.VCI_USBCAN2, 0, chn)
         if ret == self.STATUS_OK:
             self.channelStatus[chn] = 1
@@ -89,7 +106,7 @@ class USB_CAN:
             print('Start CAN Channel {} fail'.format(chn))
         return ret
 
-    def setCANID(self,canID=0x07FF):
+    def setCANID(self,canID=MASTER_BROADCAST):
         self.CAN_ID = canID
 
     def start_keyboard(self):
@@ -137,18 +154,18 @@ class USB_CAN:
         else:
             print("Rx Channel {} Not opened".format(chn))
 
-    def transmit(self,pdata,num):
+    def transmit(self,pdata,num,chn=0):
         ret=COM_OK
         frameNB=num//8
         remBytesNB=num%8
         pdataInd=0
         for i in range(frameNB):
             if(ret==COM_OK):
-                ret = self.transmit_Frame(pdata[pdataInd:],8)
+                ret = self.transmit_Frame(pdata[pdataInd:],8,chn)
                 pdataInd+=8
-                time.sleep(0.0001)
+                time.sleep(0.0005)
         if(ret==COM_OK and remBytesNB!=0):
-            ret = self.transmit_Frame(pdata[pdataInd:],remBytesNB)
+            ret = self.transmit_Frame(pdata[pdataInd:],remBytesNB,chn)
         return ret
 
     def transmit_Frame(self, frameData, dalalen, chn=0):
@@ -187,7 +204,6 @@ class USB_CAN:
                     return COM_OK
             if(time.time()-tstart>self.rxTimeout):
                 return COM_TIMEOUT
-
 
 
 

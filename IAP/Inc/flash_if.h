@@ -203,7 +203,7 @@ enum
 #define ABS_RETURN(x,y)               ((x) < (y)) ? ((y)-(x)) : ((x)-(y))
 
 
-uint32_t FLASH_If_Erase(uint32_t StartSector);
+uint32_t FLASH_If_Erase(uint32_t StartSector,uint32_t endAdd);
 uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t length);
 
 #endif  /* __FLASH_IF_H */

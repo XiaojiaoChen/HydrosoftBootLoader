@@ -9,7 +9,9 @@
 #define INC_MYQUEUE_H_
 
 #include "main.h"
-#define MY_QUEUE_SIZE 1280
+
+
+#define MY_QUEUE_SIZE 1280  //Must be larger than 1030
 
 typedef struct MYQUEUETAG{
 	uint8_t buf[MY_QUEUE_SIZE];

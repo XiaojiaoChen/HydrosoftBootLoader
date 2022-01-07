@@ -70,12 +70,10 @@ static HAL_StatusTypeDef ReceivePacket(uint8_t *p_data, uint32_t *p_length, uint
   uint32_t packet_size = 0;
   HAL_StatusTypeDef status;
   uint8_t char1;
-  uint8_t bb[1000];
   *p_length = 0;
 
 
   status = FDCAN_Receive(&char1, 1, timeout);
-  //status = FDCAN_Receive(bb, 1000, timeout);
 
   if (status == HAL_OK)
   {
@@ -111,7 +109,7 @@ static HAL_StatusTypeDef ReceivePacket(uint8_t *p_data, uint32_t *p_length, uint
 
     if (packet_size >= PACKET_SIZE )
     {
-      status = FDCAN_Receive(&p_data[PACKET_NUMBER_INDEX], packet_size + PACKET_OVERHEAD_SIZE, timeout);
+      status = FDCAN_Receive(&p_data[PACKET_NUMBER_INDEX], packet_size + PACKET_OVERHEAD_SIZE, 5000);//400ms time out
 
       /* Simple packet sanity check */
       if (status == HAL_OK )
@@ -139,9 +137,6 @@ static HAL_StatusTypeDef ReceivePacket(uint8_t *p_data, uint32_t *p_length, uint
         packet_size = 0;
       }
     }
-  }
-  else{
-	  int aa=1;
   }
   *p_length = packet_size;
   return status;
@@ -303,11 +298,11 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
                       result = COM_LIMIT;
                     }
                     /* erase user application area */
-                    uint32_t eraseStatus;
-                    eraseStatus = FLASH_If_Erase(APPLICATION_ADDRESS);
+                    FLASH_If_Erase(APPLICATION_ADDRESS,FLASH_USER_END_ADDR);
                     *p_size = filesize;
 
                 	//FDCAN_ClearRxBuffer();
+                    HAL_Delay(1);
                     FDCAN_PutByte(ACK);
                     FDCAN_PutByte(CRC16);
                   }
@@ -326,7 +321,6 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
                   ramsource = (uint32_t) & aPacketData[PACKET_DATA_INDEX];
 
                   /* Write received data in Flash */
-
                   if (FLASH_If_Write(flashdestination, (uint32_t*) ramsource, packet_length/8) == FLASHIF_OK)
                   {
                     flashdestination += packet_length;
@@ -356,6 +350,7 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
           break;
         case HAL_TIMEOUT:
         	haltimeout++;
+        	FDCAN_ClearRxBuffer();
         case HAL_ERROR:
         	halerror++;
         default:
@@ -372,7 +367,7 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
           else
           {
         	/* before asking Ask for a packet, clear the buffer for a clean packet */
-        	//FDCAN_ClearRxBuffer();
+        	FDCAN_ClearRxBuffer();
             FDCAN_PutByte(CRC16); /* Ask for a packet */
           }
           break;
