@@ -4,6 +4,8 @@ import threading
 import queue
 import time
 
+import copy
+
 
 COM_OK       = 0
 COM_ERROR    = 1
@@ -19,7 +21,7 @@ RX_FILTER_MASK_ALL=0xFFFFFFFF
 RX_FILTER_MASK_ONE=0x00000000
 
 
-
+RX_VERBOSE = 1
 
 class VCI_INIT_CONFIG(Structure):
     _fields_ = [("AccCode", c_uint),
@@ -69,7 +71,8 @@ class USB_CAN:
         self.threads=[]
         self.kbdQueue = queue.Queue()
 
-        self.rxQueue = queue.Queue()
+        self.rxBytesQueue = queue.Queue()
+        self.rxFrameQueue = queue.PriorityQueue()
         self.rxTimeout=200
 
         self.latestRxData=bytearray()
@@ -77,6 +80,8 @@ class USB_CAN:
 
         rx_vci_can_obj_type = VCI_CAN_OBJ*2500
         self.rx_vci_can_obj = rx_vci_can_obj_type()
+        for rxobj in self.rx_vci_can_obj:
+            rxobj.TimeFlag=1
 
         self.tx_vci_can_obj = VCI_CAN_OBJ()
 
@@ -156,14 +161,17 @@ class USB_CAN:
                 rxNB=0
                 while rxNB <= 0 and self.receiving_alive:
                     rxNB = self.canDLL.VCI_Receive(self.VCI_USBCAN2, 0, chn, byref(self.rx_vci_can_obj), 2500, 0)
-                for i in range (rxNB):
-                    rxid=self.rx_vci_can_obj[i].ID
-                    # if(self.RxFilType==self.RX_FILTER_TYPE_ALL or (self.RxFilType==self.RX_FILTER_TYPE_ONE and rxid == self.RxNodeID)):
-                    dlen=self.rx_vci_can_obj[i].DataLen
-                    dlc=bytearray(self.rx_vci_can_obj[i].Data[:dlen])
-                    for dlctata in dlc:
-                        self.rxQueue.put(dlctata)
-                    print(dlc.decode('iso-8859-1'), end='', flush=True)
+
+                #temp_rx_vci_can_obj= self.rx_vci_can_obj[:rxNB]
+                #keep this block fast, otherwise the received data will be errupted
+                dlc=bytearray()
+                for i in range(rxNB):
+                    dlc.extend(bytearray(self.rx_vci_can_obj[i].Data[:self.rx_vci_can_obj[i].DataLen]))
+                
+                for dlcbyte in dlc:
+                    self.rxBytesQueue.put(dlcbyte)
+                print(dlc.decode('iso-8859-1'),end="")
+
 
                 rxNB=0
         else:
@@ -206,8 +214,8 @@ class USB_CAN:
     def clearRxBuffer(self):
         self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 0)
         self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 1)
-        while(self.rxQueue.qsize()!=0):
-            self.rxQueue.get()
+        while(self.rxBytesQueue.qsize()!=0):
+            self.rxBytesQueue.get()
 
 
     def receive(self,pdata,num,chn=0):
@@ -215,8 +223,8 @@ class USB_CAN:
         tstart=time.time()
         try:
             while(dataInd<num):
-                if(self.rxQueue.qsize()!=0):
-                    pdata[dataInd]=self.rxQueue.get()
+                if(self.rxBytesQueue.qsize()!=0):
+                    pdata[dataInd]=self.rxBytesQueue.get()
                     dataInd+=1
                     if(dataInd==num):
                         return COM_OK

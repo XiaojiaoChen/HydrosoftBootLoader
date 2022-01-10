@@ -97,7 +97,8 @@ HAL_StatusTypeDef SerialDownload(void) {
 
 	result = Ymodem_Receive(&size);
 	if (result == COM_OK) {
-		FDCAN_PutString("CAN Node ");
+		HAL_Delay(10);
+		FDCAN_PutString("CAN_ID=");
 		FDCAN_PutString((char *)canIDStr);
 		FDCAN_PutString(" Programming Completed !\n\r-------------------------------\r\n Name: ");
 		FDCAN_PutString((char*) aFileName);
@@ -140,14 +141,16 @@ void IAP_Menu() {
 	uint8_t canAddStr[50]={0};
 	Int2Str(canAddStr,(uint32_t)(canIDAddress));
 
+	HAL_Delay(500);
+
 	FDCAN_PutString("\r\n=================== CAN_ID = ");
 	FDCAN_PutString((char *)canIDStr);
 	FDCAN_PutString(" at Address ");
 	FDCAN_PutString((char *)canAddStr);
 	FDCAN_PutString("   as uint64_t ====\r\n\n");
-	FDCAN_PutString("  Jump to application                  ----------------- 0\r\n\n");
-	FDCAN_PutString("  Download image to the internal Flash ----------------- 1\r\n\n");
-	FDCAN_PutString("  hold                                 ----------------- 2\r\n\n");
+	FDCAN_PutString("  Jump to application                  ----------------- g\r\n\n");
+	FDCAN_PutString("  Download image to the internal Flash ----------------- f\r\n\n");
+	FDCAN_PutString("  hold                                 ----------------- h\r\n\n");
 
 	while (1) {
 

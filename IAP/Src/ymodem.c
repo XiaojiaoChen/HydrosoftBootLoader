@@ -313,6 +313,7 @@ COM_StatusTypeDef Ymodem_Receive ( uint32_t *p_size )
                     FDCAN_PutByte(ACK);
                     file_done = 1;
                     session_done = 1;
+                    HAL_Delay(1);
                     break;
                   }
                 }

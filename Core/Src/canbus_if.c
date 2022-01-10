@@ -9,7 +9,7 @@
 
 /* Modify this CAN_ID_64 for different board. This constant will be flashed and stored as a double word at address 0x08003800 */
 
-const uint64_t CAN_ID_64=0x0000;   //itself is stored at 0x08002068
+const uint64_t CAN_ID_64=0x0003;   //itself is stored at 0x08002068
 
 
 
@@ -120,17 +120,18 @@ HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int32_t num,uint32_t timeout)
 	HAL_StatusTypeDef status=HAL_OK;
 	uint32_t frameNB=num/8;
 	uint32_t remBytesNB=num%8;
+	HAL_Delay(2);
 	for(int i=0;i<frameNB && (status==HAL_OK);i++){
 		status = FDCAN_Transmit_One_Frame(p_string,8,timeout);
 		p_string+=8;
-		HAL_Delay(1);
+		HAL_Delay(2);
 	}
 
 	if(status==HAL_OK && remBytesNB!=0){
-		HAL_Delay(1);
+		HAL_Delay(2);
 		status = FDCAN_Transmit_One_Frame(p_string,remBytesNB,timeout);
 	}
-
+	HAL_Delay(2);
 	return status;
 }
 
