@@ -1,4 +1,5 @@
 from ctypes import *
+from os import EX_CANTCREAT
 import threading
 import queue
 import time
@@ -14,7 +15,10 @@ MASTER_BROADCAST=0x07FF
 MASTER_P2P_MASK =0x0400
 
 RX_FILTER_MASK_ALL=0xFFFFFFFF
+
 RX_FILTER_MASK_ONE=0x00000000
+
+
 
 
 class VCI_INIT_CONFIG(Structure):
@@ -42,7 +46,7 @@ class VCI_CAN_OBJ(Structure):
 
 
 
-
+#two channels could be used simultaneously
 class USB_CAN:
     def __init__(self, CAN_ID=MASTER_BROADCAST, baud=1000000):
 
@@ -57,6 +61,8 @@ class USB_CAN:
 
         self.RX_FILTER_TYPE_ALL = 0
         self.RX_FILTER_TYPE_ONE = 1
+        self.RxFilType = self.RX_FILTER_TYPE_ALL
+        self.RxNodeID = 0
 
         self.receiving_alive=0
         self.keyboard_alive=0
@@ -77,33 +83,41 @@ class USB_CAN:
         ret = self.canDLL.VCI_OpenDevice(self.VCI_USBCAN2, 0, 0)
 
         if ret == self.STATUS_OK:
-            print('Open USB_CAN Device successful')
+            print('[INFO]Open USB_CAN Device successful')
             ret = self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 0)
             ret = self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, 1)
         else:
-            print('Open USB_CAN Device failed')
+            print('[INFO]Open USB_CAN Device failed')
 
 
 
     def open(self, chn=0,filterType=0,rxID=0):
-        filterAcc=rxID<<21
-        filterMask=RX_FILTER_MASK_ALL
-        if(filterType==self.RX_FILTER_TYPE_ONE):
-            filterMask=RX_FILTER_MASK_ONE
-        #Init and Start CAN channel
+
+        self.RxNodeID = rxID
+        self.RxFilType = filterType
+
+        #determine filter parameters from filter Type and nodeID
+        filterAcc = self.RxNodeID<<21
+        if(self.RxFilType == 0):
+            filterMask = RX_FILTER_MASK_ALL
+        else:
+            filterMask = RX_FILTER_MASK_ONE
+
+        #Init CAN channel
         self.vci_initconfig = VCI_INIT_CONFIG(
             filterAcc, filterMask, 0, 0, 0x00, 0x14, 0)  # 1M baudrate, 87.5%,  normal mode, all ID acceptable
         ret = self.canDLL.VCI_InitCAN(
             self.VCI_USBCAN2, 0, chn, byref(self.vci_initconfig))
         if ret != self.STATUS_OK:
-            print('Init CAN Channel {} fail'.format(chn))
+            print('[INFO]Init CAN Channel {} fail'.format(chn))
 
+        #Start CAN channel
         ret = self.canDLL.VCI_StartCAN(self.VCI_USBCAN2, 0, chn)
         if ret == self.STATUS_OK:
             self.channelStatus[chn] = 1
             ret = self.canDLL.VCI_ClearBuffer(self.VCI_USBCAN2, 0, chn)
         else:
-            print('Start CAN Channel {} fail'.format(chn))
+            print('[INFO]Start CAN Channel {} fail'.format(chn))
         return ret
 
     def setCANID(self,canID=MASTER_BROADCAST):
@@ -111,7 +125,7 @@ class USB_CAN:
 
     def start_keyboard(self):
         self.keyboard_alive = 1
-        print("Keyboard Input Enabled")
+        # print("[INFO]Keyboard Input Enabled")
         self.keyboardThread = threading.Thread(target=self.keyboard_thread)
         self.threads.append(self.keyboardThread)
         self.keyboardThread.start()
@@ -126,12 +140,12 @@ class USB_CAN:
                 if (len(input_str) > 0):
                     self.kbdQueue.put(input_str)
             except:
-                print("quit keyboard thread")
+                print("[INFO]quit keyboard thread")
                 break
 
     def start_receiving(self, chn=0):
         self.receiving_alive=1
-        print("Receiving thread started")
+        # print("[INFO]Receiving thread started")
         self.receivingThread = threading.Thread(target=self.receiving_thread,args=(chn,))
         self.threads.append(self.receivingThread)
         self.receivingThread.start()
@@ -143,16 +157,17 @@ class USB_CAN:
                 while rxNB <= 0 and self.receiving_alive:
                     rxNB = self.canDLL.VCI_Receive(self.VCI_USBCAN2, 0, chn, byref(self.rx_vci_can_obj), 2500, 0)
                 for i in range (rxNB):
+                    rxid=self.rx_vci_can_obj[i].ID
+                    # if(self.RxFilType==self.RX_FILTER_TYPE_ALL or (self.RxFilType==self.RX_FILTER_TYPE_ONE and rxid == self.RxNodeID)):
                     dlen=self.rx_vci_can_obj[i].DataLen
-                    #print("Rx dalaLen={}".format(dlen))
                     dlc=bytearray(self.rx_vci_can_obj[i].Data[:dlen])
                     for dlctata in dlc:
                         self.rxQueue.put(dlctata)
                     print(dlc.decode('iso-8859-1'), end='', flush=True)
-                    #print("dlc={}".format(dlc))
+
                 rxNB=0
         else:
-            print("Rx Channel {} Not opened".format(chn))
+            print("[INFO]Rx Channel {} Not opened".format(chn))
 
     def transmit(self,pdata,num,chn=0):
         ret=COM_OK
@@ -163,7 +178,7 @@ class USB_CAN:
             if(ret==COM_OK):
                 ret = self.transmit_Frame(pdata[pdataInd:],8,chn)
                 pdataInd+=8
-                time.sleep(0.0005)
+                time.sleep(0.0001)
         if(ret==COM_OK and remBytesNB!=0):
             ret = self.transmit_Frame(pdata[pdataInd:],remBytesNB,chn)
         return ret
@@ -179,11 +194,13 @@ class USB_CAN:
                     self.tx_vci_can_obj.Data[i]=frameData[i]
                 if(self.canDLL.VCI_Transmit(self.VCI_USBCAN2, 0, chn, byref(self.tx_vci_can_obj), 1)!=1):
                     ret=COM_ERROR
+                # else:
+                #     print("[INFO]Tx frame ID:0x{:x}, Len {}".format(self.tx_vci_can_obj.ID,self.tx_vci_can_obj.DataLen))
             else:
-                print("Tx Error, Channel {} Not opened".format(chn))
+                print("[INFO]Tx Error, Channel {} Not opened".format(chn))
             return ret
         except:
-            print("Tx Frame timeout")
+            print("[INFO]Tx Frame timeout")
             return COM_TIMEOUT
 
     def clearRxBuffer(self):
@@ -196,31 +213,35 @@ class USB_CAN:
     def receive(self,pdata,num,chn=0):
         dataInd=0
         tstart=time.time()
-        while(dataInd<num):
-            if(self.rxQueue.qsize()!=0):
-                pdata[dataInd]=self.rxQueue.get()
-                dataInd+=1
-                if(dataInd==num):
-                    return COM_OK
-            if(time.time()-tstart>self.rxTimeout):
-                return COM_TIMEOUT
+        try:
+            while(dataInd<num):
+                if(self.rxQueue.qsize()!=0):
+                    pdata[dataInd]=self.rxQueue.get()
+                    dataInd+=1
+                    if(dataInd==num):
+                        return COM_OK
+                if(time.time()-tstart>self.rxTimeout):
+                    return COM_TIMEOUT
+        except:
+            return COM_ERROR
 
 
 
     def close(self):
         ret = self.canDLL.VCI_CloseDevice(self.VCI_USBCAN2, 0)
-        print("CAN device closed")
+        print("[INFO]CAN device closed")
         self.receiving_alive=0
         self.keyboard_alive=0
         for threadOb in self.threads:
-            threadOb.join(1)
+            threadOb.join()
         
 if __name__ == "__main__":
+    print("[INFO]This is a USB CAN Test program")
     usbcan = USB_CAN()
     usbcan.open(0)
     usbcan.open(1)
     try:
-        usbcan.start_receiving(1)
+        usbcan.start_receiving(0)
         usbcan.start_keyboard()
     except:
         usbcan.close()

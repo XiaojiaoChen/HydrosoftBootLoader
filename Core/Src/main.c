@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2021 STMicroelectronics.
+  * Copyright (c) 2022 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -94,16 +94,12 @@ int main(void)
   FDCAN_Config();
 
    IAP_Menu(); //10 000 ms before jump
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
   while (1)
   {
-//	  canSend();
-//	  HAL_Delay(10);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -176,7 +172,7 @@ static void MX_FDCAN1_Init(void)
   hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
   hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
   hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
-  hfdcan1.Init.AutoRetransmission = DISABLE;
+  hfdcan1.Init.AutoRetransmission = ENABLE;
   hfdcan1.Init.TransmitPause = DISABLE;
   hfdcan1.Init.ProtocolException = DISABLE;
   hfdcan1.Init.NominalPrescaler = 4;
@@ -242,7 +238,6 @@ void deInitAll(void){
 	SysTick->VAL = 0;
 
 }
-
 /* USER CODE END 4 */
 
 /**

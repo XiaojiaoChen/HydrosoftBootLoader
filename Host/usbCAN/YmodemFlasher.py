@@ -50,6 +50,193 @@ ABORT2          =        0x61 # 'a' == 0x61, abort by uNAK_TIMEOUT     =        
 DOWNLOAD_TIMEOUT=        5000 #One second retry delay */
 MAX_ERRORS      =        5
 
+#Choose one CAN channel (0 or 1) on the device as the flash channel
+class YMODEM_FLASHER:
+  def __init__(self,chn=0):
+    self.CAN_ID_BROADCAST  = MASTER_BROADCAST
+    self.CAN_ID_P2P_MASK = MASTER_P2P_MASK
+
+    self.canbus=USB_CAN(CAN_ID=self.CAN_ID_BROADCAST)
+    self.chn=chn
+    self.packetBuffer=bytearray(PACKET_1K_SIZE + PACKET_OVERHEAD_SIZE)
+    self.a_rx_ctrl=bytearray(1)
+  
+  def open(self,filterType=0,rxID=0):
+    self.canbus.open(self.chn,filterType,rxID)
+    self.canbus.start_keyboard()
+    self.canbus.start_receiving(self.chn)
+
+  def GoToApp(self):
+    id=self.canbus.CAN_ID
+    self.canbus.setCANID(self.CAN_ID_BROADCAST)
+    holdChar = b'g'
+    self.canbus.transmit(holdChar,1,self.chn)
+    print("[INFO]Sent Command: jump to app")
+    self.canbus.setCANID(id)
+
+  def getInput(self):
+    return self.canbus.getInput()
+
+  def HoldAll(self):
+    #set Tx ID to host ID,return char 'h' for holding on all CAN Node
+    id=self.canbus.CAN_ID
+    self.canbus.setCANID(self.CAN_ID_BROADCAST)
+    holdChar = b'h'
+    print("[INFO]Sent Command: Hold all")
+    self.canbus.transmit(holdChar,1,self.chn)
+    self.canbus.setCANID(id)
+
+
+
+  def waitFor(self,waitingByte):
+    status = COM_ERROR
+      #Wait for Ack or 'C' */
+    if (self.canbus.receive(self.a_rx_ctrl, 1) == COM_OK):
+      if (self.a_rx_ctrl[0] == waitingByte):
+        # if(waitingByte==ACK):
+        #   print("[INFO]get ACK")
+        status = COM_OK
+      elif (self.a_rx_ctrl[0] == CA):
+        print("[INFO]Get CA")
+        if ((self.canbus.receive(self.a_rx_ctrl, 1) == COM_OK) and (self.a_rx_ctrl[0] == CA)):
+          time.sleep( 2 )
+          status = COM_ABORT
+      elif (self.a_rx_ctrl[0] == CRC16):
+        print("[INFO]Get C")
+      else:
+        print("[INFO]invalid code {}".format(self.a_rx_ctrl[0]))
+        status = COM_ERROR
+    else:
+      status = COM_TIMEOUT
+
+    return status
+
+
+  def Flash(self,targetCANID,filePath):
+
+    p_file_name=os.path.basename(filePath)
+    p_file_content = open(filePath, 'rb').read()
+    file_size=len(p_file_content)
+
+    #set Tx ID to P2P ID,
+    id=self.CAN_ID_P2P_MASK | targetCANID
+    self.canbus.setCANID(self.CAN_ID_P2P_MASK | targetCANID)
+    print("[INFO]Set CAN Tx ID to 0x{:x}".format(id))
+
+    #send flash request
+    print("[INFO]Sending Flash Request")
+    self.canbus.clearRxBuffer()
+    requestChar = b'f'
+    self.canbus.transmit(requestChar,1,self.chn)
+    result = COM_ERROR
+    error=0
+    while(result!=COM_OK):
+      result = self.waitFor(CRC16)
+      if(result==COM_ABORT):
+        return COM_ABORT
+      error+=1
+      if(error>5):
+        return COM_ERROR
+
+
+    #Send Init Packet
+    print("[INFO]Sending Init Packet")
+    PrepareIntialPacket(self.packetBuffer, p_file_name, file_size)
+    self.canbus.clearRxBuffer()
+    result = COM_ERROR
+    error=0
+    while(result != COM_OK ):
+      if(self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE,self.chn)==COM_OK):
+        print("[INFO]Erasing flash ...")
+        result = self.waitFor(ACK)
+        if(result==COM_OK):
+          self.waitFor(CRC16)
+        elif(result==COM_ABORT):
+          return COM_ABORT
+        error+=1
+        if(error>5):
+          return COM_ERROR
+
+    #Send Data Packets
+    pkt_size=0
+    blk_number = 1
+    p_file_ind = 0
+    size = file_size
+    packetNum=0
+    packetTotal = size//1024+1
+    result=COM_OK
+    while ((size) and (result == COM_OK )):
+      
+      #Prepare next data packet */
+      PreparePacket(p_file_content[p_file_ind:], self.packetBuffer, blk_number, size)
+      packetNum +=1
+      curT0=time.time_ns()//1000000
+
+      #Resend packet if 'ACK' is not received*/
+      result=COM_ERROR
+      while (result != COM_OK ):
+        curT1=time.time_ns()//1000000
+
+        #Determine packet size */
+        if (size >= PACKET_1K_SIZE):
+          pkt_size = PACKET_1K_SIZE
+        else:
+          pkt_size = PACKET_SIZE
+        
+        #before sending every packet, clear the rx buffer
+        self.canbus.clearRxBuffer()
+        # print("[INFO]Sending Data Packet ({}/{}".format(packetNum,packetTotal))
+        #Send data packet
+        self.canbus.transmit(self.packetBuffer, pkt_size + PACKET_OVERHEAD_SIZE,self.chn)
+        curT2 = time.time_ns()//1000000
+
+        #Wait for ACK
+        result = self.waitFor(ACK)
+
+        #if get ACK, update next packet info
+        if(result==COM_OK):
+          curT3 = time.time_ns()//1000000
+          print("[INFO]Tx: {} ms; ACK {} ms; Sent Data Packet ({}/{})".format(curT2-curT1,curT3-curT2,packetNum,packetTotal))
+          if (size > pkt_size):
+            p_file_ind += pkt_size
+            size -= pkt_size
+            if (blk_number == (USER_FLASH_SIZE / PACKET_1K_SIZE)):
+              result = COM_LIMIT #boundary error */
+            else:
+              blk_number+=1
+          else:
+            p_file_ind += pkt_size
+            size = 0
+        elif(result==COM_ABORT):
+          return COM_ABORT
+      
+    #Sending End Of Transmission char */
+    result=COM_ERROR
+    while (result != COM_OK ):
+      print("[INFO]Sending EOT")
+      self.canbus.transmit([EOT],1,self.chn)
+      result = self.waitFor(ACK)
+
+    #Empty packet to close session */
+    PrepareIntialPacket(self.packetBuffer,'',0)
+    result=COM_ERROR
+    while (result != COM_OK ):
+      print("[INFO]Sending Closing packet")
+      self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE,self.chn)
+      result =COM_ERROR
+      error=0
+      while(result!=COM_OK):
+        result = self.waitFor(ACK)
+        error+=1
+        if(error>2):
+          return result
+
+    return result #file transmitted successfully */
+
+  def close(self):
+    self.canbus.close()        
+
+
 
 def UpdateCRC16(crc_in, byte):
   crc = crc_in
@@ -132,225 +319,3 @@ def PreparePacket(p_source, p_packet,pkt_nr,size_blk):
   temp_crc = Cal_CRC16(p_packet[PACKET_DATA_INDEX:], packet_size)
   p_packet[PACKET_DATA_INDEX+packet_size]= (temp_crc >> 8)
   p_packet[PACKET_DATA_INDEX+packet_size+1]= (temp_crc & 0xFF)
-
-class YMODEM_FLASHER:
-  def __init__(self):
-    self.CAN_ID_BROADCAST  = MASTER_BROADCAST
-    self.CAN_ID_P2P_MASK = MASTER_P2P_MASK
-
-    self.canbus=USB_CAN(CAN_ID=self.CAN_ID_BROADCAST)
-
-    self.packetBuffer=bytearray(PACKET_1K_SIZE + PACKET_OVERHEAD_SIZE)
-    self.a_rx_ctrl=bytearray(1)
-  
-  def open(self,chn=0,filterType=0,rxID=0):
-    self.chn=chn;
-    self.canbus.open(chn,filterType,rxID)
-    self.canbus.start_keyboard()
-    self.canbus.start_receiving(self.chn)
-
-  def GoToApp(self):
-    #set Tx ID to host ID,return char '2' for holding on all CAN Node
-    id=self.canbus.CAN_ID
-    self.canbus.setCANID(self.CAN_ID_BROADCAST)
-    holdChar = b'0'
-    self.canbus.transmit(holdChar,1,self.chn)
-    self.canbus.setCANID(id)
-
-  def getInput(self):
-      return self.canbus.getInput()
-
-  def HoldAll(self):
-    #set Tx ID to host ID,return char '2' for holding on all CAN Node
-    id=self.canbus.CAN_ID
-    self.canbus.setCANID(self.CAN_ID_BROADCAST)
-    holdChar = b'2'
-    self.canbus.transmit(holdChar,1,self.chn)
-    self.canbus.setCANID(id)
-
-
-
-  def waitFor(self,waitingByte):
-    status = COM_ERROR
-      #Wait for Ack or 'C' */
-    if (self.canbus.receive(self.a_rx_ctrl, 1) == COM_OK):
-      if (self.a_rx_ctrl[0] == waitingByte):
-        if(waitingByte==ACK):
-          print("get ACK")
-        status = COM_OK
-      elif (self.a_rx_ctrl[0] == CA):
-        print("Get CA")
-        if ((self.canbus.receive(self.a_rx_ctrl, 1) == COM_OK) and (self.a_rx_ctrl[0] == CA)):
-          time.sleep( 2 )
-          status = COM_ABORT
-      elif (self.a_rx_ctrl[0] == CRC16):
-        print("Get C")
-      else:
-        print("invalid code {}".format(self.a_rx_ctrl[0]))
-        status = COM_ERROR
-    else:
-      status = COM_TIMEOUT
-
-    return status
-
-
-  def Flash(self,targetCANID,filePath):
-        
-    p_file_name=os.path.basename(filePath)
-    p_file_content = open(filePath, 'rb').read()
-    file_size=len(p_file_content)
-
-    #set Tx ID to P2P ID,
-    id=self.CAN_ID_P2P_MASK | targetCANID
-    self.canbus.setCANID(self.CAN_ID_P2P_MASK | targetCANID)
-    print("set CAN Tx ID to 0x{:x}".format(id))
-
-    #hold first
-    requestChar = b'2'
-    self.canbus.transmit(requestChar,1,self.chn)
-    time.sleep(0.5)
-    self.canbus.clearRxBuffer() #clear response rx buffer
-
-    #send flash request
-    print("Sending Flash Request")
-    self.canbus.clearRxBuffer()
-    requestChar = b'1'
-    self.canbus.transmit(requestChar,1,self.chn)
-    result = COM_ERROR
-    while(result!=COM_OK):
-      result = self.waitFor(CRC16)
-      if(result==COM_ABORT):
-        return COM_ABORT
-
-    #Send Init Packet
-    print("Sending Init Packet")
-    PrepareIntialPacket(self.packetBuffer, p_file_name, file_size)
-    self.canbus.clearRxBuffer()
-    result = COM_ERROR
-    while(result != COM_OK ):
-      if(self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE,self.chn)==COM_OK):
-        print("Erasing flash ...")
-        result = self.waitFor(ACK)
-        if(result==COM_OK):
-          self.waitFor(CRC16)
-        elif(result==COM_ABORT):
-          return COM_ABORT
-
-
-    #Send Data Packets
-    pkt_size=0
-    blk_number = 1
-    p_file_ind = 0
-    size = file_size
-    packetNum=0
-    packetTotal = size//1024+1
-    result=COM_OK
-    while ((size) and (result == COM_OK )):
-      
-      #Prepare next data packet */
-      PreparePacket(p_file_content[p_file_ind:], self.packetBuffer, blk_number, size)
-      packetNum +=1
-      curT0=time.time_ns()//1000000
-
-      #Resend packet if 'ACK' is not received*/
-      result=COM_ERROR
-      while (result != COM_OK ):
-        curT1=time.time_ns()//1000000
-
-        #Determine packet size */
-        if (size >= PACKET_1K_SIZE):
-          pkt_size = PACKET_1K_SIZE
-        else:
-          pkt_size = PACKET_SIZE
-        
-        #before sending every packet, clear the rx buffer
-        self.canbus.clearRxBuffer()
-        print("Sending Data Packet ({}/{}".format(packetNum,packetTotal))
-        #Send data packet
-        self.canbus.transmit(self.packetBuffer, pkt_size + PACKET_OVERHEAD_SIZE,self.chn)
-        curT2 = time.time_ns()//1000000
-
-        #Wait for ACK
-        result = self.waitFor(ACK)
-
-        #if get ACK, update next packet info
-        if(result==COM_OK):
-          curT3 = time.time_ns()//1000000
-          print("Tx: {} ms; Sent Data Packet ({}/{})".format(curT2-curT1,packetNum,packetTotal))
-          if (size > pkt_size):
-            p_file_ind += pkt_size
-            size -= pkt_size
-            if (blk_number == (USER_FLASH_SIZE / PACKET_1K_SIZE)):
-              result = COM_LIMIT #boundary error */
-            else:
-              blk_number+=1
-          else:
-            p_file_ind += pkt_size
-            size = 0
-        elif(result==COM_ABORT):
-          return COM_ABORT
-      
-    #Sending End Of Transmission char */
-    result=COM_ERROR
-    while (result != COM_OK ):
-      print("Sending EOT")
-      self.canbus.transmit([EOT],1,self.chn)
-      result = self.waitFor(ACK)
-
-    #Empty packet to close session */
-    PrepareIntialPacket(self.packetBuffer,'',0)
-    result=COM_ERROR
-    while (result != COM_OK ):
-      print("Sending Closing packet")
-      self.canbus.transmit(self.packetBuffer, PACKET_SIZE + PACKET_OVERHEAD_SIZE,self.chn)
-      result = self.waitFor(ACK)
-
-    return result #file transmitted successfully */
-
-  def close(self):
-    self.canbus.close()        
-
-
-
-binPath="hydrosoft_IMU_V3.bin"
-
-node_canID =0
-
-flasher = YMODEM_FLASHER()
-
-chn=0
-
-
-
-fliterType = flasher.canbus.RX_FILTER_TYPE_ONE
-
-
-flasher.open(chn,fliterType,node_canID)
-
-
-try:
-  while(True):
-    inputStr=flasher.getInput()
-
-    if(inputStr[0]=='g'):
-      flasher.GoToApp()
-
-    elif(inputStr[0]=='f'):
-      if(len(inputStr)>1):
-        targetID=int(inputStr[1:])
-      else:
-        targetID=node_canID
-      flasher.open(chn,fliterType,targetID)
-      flasher.HoldAll()
-      time.sleep(0.1)
-      flasher.canbus.clearRxBuffer()
-      flasher.Flash(targetID,binPath)
-
-    elif(inputStr[0]=='h'):
-      flasher.HoldAll()
-
-    elif(inputStr[0]=='c'):
-      flasher.canbus.clearRxBuffer()
-
-except KeyboardInterrupt:
-  flasher.close()

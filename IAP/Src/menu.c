@@ -60,6 +60,7 @@ pFunction JumpToApplication;
 uint32_t JumpAddress;
 uint32_t FlashProtection = 0;
 uint8_t aFileName[FILE_NAME_LENGTH];
+extern const uint64_t CAN_ID_64;
 uint8_t canIDStr[20]={0};
 /* Private function prototypes -----------------------------------------------*/
 HAL_StatusTypeDef SerialDownload(void);
@@ -96,9 +97,9 @@ HAL_StatusTypeDef SerialDownload(void) {
 
 	result = Ymodem_Receive(&size);
 	if (result == COM_OK) {
-		FDCAN_PutString("\n\n\r CAN Node ");
+		FDCAN_PutString("CAN Node ");
 		FDCAN_PutString((char *)canIDStr);
-		FDCAN_PutString(" Programming Completed !\n\r--------------------------------\r\n Name: ");
+		FDCAN_PutString(" Programming Completed !\n\r-------------------------------\r\n Name: ");
 		FDCAN_PutString((char*) aFileName);
 		Int2Str(number, size);
 		FDCAN_PutString("\n\r Size: ");
@@ -126,8 +127,8 @@ HAL_StatusTypeDef SerialDownload(void) {
  * @retval None
  */
 void IAP_Menu() {
-	extern const uint64_t CAN_ID_64;
-	uint8_t defaultKeyValue = 'a';
+
+	uint8_t defaultKeyValue = '*';
 	uint8_t key = defaultKeyValue;
 	uint8_t holdon = 0;
 	uint32_t tstart = HAL_GetTick();
@@ -174,23 +175,23 @@ void IAP_Menu() {
 		/* Receive key , ms interval for check input char */
 		if (FDCAN_Receive(&key, 1, 10) == HAL_OK) {
 			switch (key) {
-			case '0':
+			case 'g':
 				FDCAN_PutString("Start program execution......\r\n\n");
 				JumpToApp();
 				break;
-			case '1':
+			case 'f':
 				/* Download user application in the Flash */
 				holdon = 1;
 				if(SerialDownload()==HAL_OK){
 //					/*Dont jump directly, may contaminate the CAN bus for other nodes' update*/
-					FDCAN_PutString("Holding on......\r\n\n");
+//					FDCAN_PutString("Holding on......\r\n\n");
 
 				}
 				else{
 					FDCAN_ClearRxBuffer();
 				}
 				break;
-			case '2':
+			case 'h':
 				/* Just hold, waiting for further instruction */
 				holdon = 1;
 				FDCAN_PutString((char *)canIDStr);

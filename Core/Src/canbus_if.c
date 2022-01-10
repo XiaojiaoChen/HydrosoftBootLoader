@@ -112,20 +112,23 @@ HAL_StatusTypeDef FDCAN_Transmit_One_Frame(uint8_t *p_string,int16_t num,uint32_
 
 	}
 
+
 	return status;
 }
 
-HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int16_t num,uint32_t timeout){
+HAL_StatusTypeDef FDCAN_Transmit(uint8_t *p_string,int32_t num,uint32_t timeout){
 	HAL_StatusTypeDef status=HAL_OK;
 	uint32_t frameNB=num/8;
 	uint32_t remBytesNB=num%8;
-	uint8_t timeoutInd=timeout/8;
 	for(int i=0;i<frameNB && (status==HAL_OK);i++){
-		status = FDCAN_Transmit_One_Frame(p_string,8,timeoutInd);
+		status = FDCAN_Transmit_One_Frame(p_string,8,timeout);
 		p_string+=8;
+		HAL_Delay(1);
 	}
+
 	if(status==HAL_OK && remBytesNB!=0){
-		status = FDCAN_Transmit_One_Frame(p_string,remBytesNB,timeoutInd);
+		HAL_Delay(1);
+		status = FDCAN_Transmit_One_Frame(p_string,remBytesNB,timeout);
 	}
 
 	return status;
@@ -152,7 +155,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 }
 
 /*get Rx data from rx queue*/
-HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int16_t num,uint32_t timeout){
+HAL_StatusTypeDef FDCAN_Receive(uint8_t *p_string,int32_t num,uint32_t timeout){
 
 	uint32_t tstart = HAL_GetTick();
 	while(queue_out_bulk(&canbus.RxQueue,p_string,num)!=HAL_OK){

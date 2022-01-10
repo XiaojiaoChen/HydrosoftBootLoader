@@ -1,9 +1,10 @@
 #MicroXplorer Configuration settings - do not modify
+FDCAN1.AutoRetransmission=ENABLE
 FDCAN1.DataPrescaler=4
 FDCAN1.DataSyncJumpWidth=4
 FDCAN1.DataTimeSeg1=11
 FDCAN1.DataTimeSeg2=4
-FDCAN1.IPParameters=NominalPrescaler,NominalSyncJumpWidth,NominalTimeSeg1,NominalTimeSeg2,DataPrescaler,DataSyncJumpWidth,DataTimeSeg1,DataTimeSeg2,StdFiltersNbr
+FDCAN1.IPParameters=NominalPrescaler,NominalSyncJumpWidth,NominalTimeSeg1,NominalTimeSeg2,DataPrescaler,DataSyncJumpWidth,DataTimeSeg1,DataTimeSeg2,StdFiltersNbr,AutoRetransmission
 FDCAN1.NominalPrescaler=4
 FDCAN1.NominalSyncJumpWidth=4
 FDCAN1.NominalTimeSeg1=11

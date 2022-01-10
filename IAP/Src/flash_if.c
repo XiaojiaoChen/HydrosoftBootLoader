@@ -110,13 +110,94 @@ uint32_t FLASH_If_Erase(uint32_t startAdd,uint32_t endAdd)
 	  return FLASHIF_OK;
 }
 
+///* Public functions ---------------------------------------------------------*/
+///**
+//  * @brief  This function writes a data buffer in flash.
+//  * @note   After writing data buffer, the flash content is checked.
+//  * @param  destination: start address for target location
+//  * @param  p_source: pointer on buffer with data to write
+//  * @param  length: length of bytes
+//  * @retval uint32_t 0: Data successfully written to Flash memory
+//  *         1: Error occurred while writing data in Flash memory
+//  *         2: Written Data in flash memory is different from expected one
+//  */
+//uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t length)
+//{
+//  uint32_t i = 0;
+//  uint32_t status=0;
+//  uint32_t blkNB256=length/256;
+//  /* Unlock the Flash to enable the flash control register access *************/
+//  HAL_FLASH_Unlock();
+//
+////  /*if address is aligned at the row beginning, using fast program as much as possible*/
+////  if( (destination & 0x000000FF) ==0){
+////	  /*i represents row number*/
+////	  for (i = 0; (i < blkNB256) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
+////	 	  {
+////		  /* Fast programming */
+////		   status=HAL_FLASH_Program(FLASH_TYPEPROGRAM_FAST, destination, (uint64_t)p_source);
+////			  if ( status== HAL_OK)
+////			{
+////			 /* Check the written value */
+////			  if (*(uint64_t*)destination != *(uint64_t*)p_source)
+////			  {
+////				/* Flash content doesn't match SRAM content */
+////				return(FLASHIF_WRITINGCTRL_ERROR);
+////			  }
+////			  /* update address and length */
+////			  destination += 256;
+////			  p_source +=256;
+////			  length-=256;
+////			}
+////			else
+////			{
+////			  /* Error occurred while writing data in Flash memory */
+////			  return (FLASHIF_WRITING_ERROR);
+////			}
+////	 	  }
+////  }
+//
+//
+//  /*program left bytes, i represents bytes number*/
+//  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i+=8)
+//  {
+//	/* Device voltage range supposed to be [2.7V to 3.6V], the operation will
+//	   be done by word */
+//	  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, destination, *((uint64_t*)p_source)) == HAL_OK)
+//	{
+//	 /* Check the written value */
+//	  if (*(uint64_t*)destination != *(uint64_t*)p_source)
+//	  {
+//		/* Flash content doesn't match SRAM content */
+//		return(FLASHIF_WRITINGCTRL_ERROR);
+//	  }
+//	  /* update address, no need to update length */
+//	  destination += 8;
+//	  p_source +=8;
+//	}
+//	else
+//	{
+//	  /* Error occurred while writing data in Flash memory */
+//	  return (FLASHIF_WRITING_ERROR);
+//	}
+//  }
+//
+//
+//  /* Lock the Flash to disable the flash control register access (recommended
+//     to protect the FLASH memory against possible unwanted operation) *********/
+//  HAL_FLASH_Lock();
+//
+//  return (FLASHIF_OK);
+//}
+
+
 /* Public functions ---------------------------------------------------------*/
 /**
   * @brief  This function writes a data buffer in flash (data are 64-bit aligned).
   * @note   After writing data buffer, the flash content is checked.
   * @param  destination: start address for target location
   * @param  p_source: pointer on buffer with data to write
-  * @param  length: length of bytes
+  * @param  length: length of data buffer (unit is 64-bit word)
   * @retval uint32_t 0: Data successfully written to Flash memory
   *         1: Error occurred while writing data in Flash memory
   *         2: Written Data in flash memory is different from expected one
@@ -125,64 +206,31 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
 {
   uint32_t i = 0;
   uint64_t *p_source64= (uint64_t*)(p_source);
-  uint64_t *p_des64=(uint64_t*)(destination);
   /* Unlock the Flash to enable the flash control register access *************/
   HAL_FLASH_Unlock();
 
-  /*address is beginning at the row begninning, using fast program*/
-  if( destination & 0x000000FF ==0){
-	  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
-	 	  {
-	 		/* Device voltage range supposed to be [2.7V to 3.6V], the operation will
-	 		   be done by word */
-	 		  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_FAST, destination, *(uint64_t*)(p_source64 + i*256)) == HAL_OK)
-	 		{
-	 		 /* Check the written value */
-	 			uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
-	 			uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
-	 			for(int j=0;j<32;j++)
-				  if ((*p_sourceCur64 != *p_desCur64))
-				  {
-					/* Flash content doesn't match SRAM content */
-					return(FLASHIF_WRITINGCTRL_ERROR);
-				  }
-	 		  /* Increment FLASH destination address */
-	 		  destination += 256;
-	 		}
-	 		else
-	 		{
-	 		  /* Error occurred while writing data in Flash memory */
-	 		  return (FLASHIF_WRITING_ERROR);
-	 		}
-	 	  }
-  }
-  else{
-	  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
-	  {
-		/* Device voltage range supposed to be [2.7V to 3.6V], the operation will
-		   be done by word */
-		  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, destination, *(uint64_t*)(p_source64 + i )) == HAL_OK)
-		{
-		 /* Check the written value */
-			uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
-			uint32_t *p_sourceCur32 = (uint32_t *)p_sourceCur64;
-			uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
-			uint32_t *p_desCur32 = (uint32_t *)p_desCur64;
-		  if ((*(uint32_t*)p_desCur32 != *(uint32_t*)p_sourceCur32) ||
-			  (*(uint32_t*)(p_desCur32+1) != *(uint32_t*)(p_sourceCur32+1)) )
-		  {
-			/* Flash content doesn't match SRAM content */
-			return(FLASHIF_WRITINGCTRL_ERROR);
-		  }
-		  /* Increment FLASH destination address */
-		  destination += 8;
-		}
-		else
-		{
-		  /* Error occurred while writing data in Flash memory */
-		  return (FLASHIF_WRITING_ERROR);
-		}
-	  }
+  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
+  {
+    /* Device voltage range supposed to be [2.7V to 3.6V], the operation will
+       be done by word */
+	  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, destination, *(uint64_t*)(p_source64 + i )) == HAL_OK)
+    {
+     /* Check the written value */
+		uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
+
+	   if ((*(uint64_t*)destination) != (*(uint64_t*)p_sourceCur64))
+      {
+        /* Flash content doesn't match SRAM content */
+        return(FLASHIF_WRITINGCTRL_ERROR);
+      }
+      /* Increment FLASH destination address */
+      destination += 8;
+    }
+    else
+    {
+      /* Error occurred while writing data in Flash memory */
+      return (FLASHIF_WRITING_ERROR);
+    }
   }
 
   /* Lock the Flash to disable the flash control register access (recommended
@@ -191,62 +239,6 @@ uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t lengt
 
   return (FLASHIF_OK);
 }
-//
-///* Public functions ---------------------------------------------------------*/
-///**
-//  * @brief  This function writes a data buffer in flash (data are 64-bit aligned).
-//  * @note   After writing data buffer, the flash content is checked.
-//  * @param  destination: start address for target location
-//  * @param  p_source: pointer on buffer with data to write
-//  * @param  length: length of data buffer (unit is 64-bit word)
-//  * @retval uint32_t 0: Data successfully written to Flash memory
-//  *         1: Error occurred while writing data in Flash memory
-//  *         2: Written Data in flash memory is different from expected one
-//  */
-//uint32_t FLASH_If_Write(uint32_t destination, uint32_t *p_source, uint32_t length)
-//{
-//  uint32_t i = 0;
-//  uint64_t *p_source64= (uint64_t*)(p_source);
-//  uint64_t *p_des64=(uint64_t*)(destination);
-//  /* Unlock the Flash to enable the flash control register access *************/
-//  HAL_FLASH_Unlock();
-//
-//  for (i = 0; (i < length) && (destination <= (FLASH_USER_END_ADDR-8)); i++)
-//  {
-//    /* Device voltage range supposed to be [2.7V to 3.6V], the operation will
-//       be done by word */
-//	  if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, destination, *(uint64_t*)(p_source64 + i )) == HAL_OK)
-//    {
-//     /* Check the written value */
-//		uint64_t *p_sourceCur64 = (uint64_t*)(p_source64 + i );
-//		uint32_t *p_sourceCur32 = (uint32_t *)p_sourceCur64;
-//		uint64_t *p_desCur64 = (uint64_t*)(p_des64 + i );
-//		uint32_t *p_desCur32 = (uint32_t *)p_desCur64;
-//      if ((*(uint32_t*)p_desCur32 != *(uint32_t*)p_sourceCur32) ||
-//    	  (*(uint32_t*)(p_desCur32+1) != *(uint32_t*)(p_sourceCur32+1)) )
-//      {
-//        /* Flash content doesn't match SRAM content */
-//        return(FLASHIF_WRITINGCTRL_ERROR);
-//      }
-//      /* Increment FLASH destination address */
-//      uint8_t buf[100];
-//      sprintf(buf,"Write Flash at %x \n",p_des64);
-//      FDCAN_PutString(buf);
-//      destination += 8;
-//    }
-//    else
-//    {
-//      /* Error occurred while writing data in Flash memory */
-//      return (FLASHIF_WRITING_ERROR);
-//    }
-//  }
-//
-//  /* Lock the Flash to disable the flash control register access (recommended
-//     to protect the FLASH memory against possible unwanted operation) *********/
-//  HAL_FLASH_Lock();
-//
-//  return (FLASHIF_OK);
-//}
 
 /**
   * @brief  Gets the page of a given address
