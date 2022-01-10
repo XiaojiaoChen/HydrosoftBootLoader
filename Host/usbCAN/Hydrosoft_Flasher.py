@@ -6,6 +6,7 @@ import time
 
 firmwarePath="hydrosoft_IMU_V3.bin"
 
+
 class HYDROSOFT_FLASHER:
   def __init__(self,chn=0) -> None:
     self.nodeIDList=[0,1,2,3]
@@ -59,13 +60,6 @@ class HYDROSOFT_FLASHER:
     except KeyboardInterrupt:
       self.close()
 
-if __name__ == "__main__":
-    print("\n============= HYDROSOFT LTD ==============\n")
-    hydrosoftflasher = HYDROSOFT_FLASHER(1)
-    try:
-      hydrosoftflasher.run()
-    except:
-      hydrosoftflasher.close()
 
         
    
